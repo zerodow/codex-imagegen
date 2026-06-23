@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codex-imagegen"
+version = "0.1.0"
+description = "Generate images from a prompt using your ChatGPT subscription (gpt-image-2 via Codex). No API key, no per-image billing."
+requires-python = ">=3.13"
+readme = "README.md"
+license = { text = "MIT" }
+dependencies = []  # stdlib only
+
+[project.scripts]
+imagegen = "codex_imagegen.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
