@@ -6,8 +6,8 @@ import urllib.error
 
 import pytest
 
-from codex_imagegen import auth
-from codex_imagegen.errors import AuthError, GatewayError
+from codex_imagegen.providers.generate.codex import auth
+from codex_imagegen.core.errors import AuthError, GatewayError
 
 
 def test_extract_tokens_ok():

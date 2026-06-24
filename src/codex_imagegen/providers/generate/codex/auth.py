@@ -15,7 +15,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from .errors import AuthError, GatewayError
+from codex_imagegen.core.errors import AuthError, GatewayError
 
 AUTH_PATH = Path.home() / ".codex" / "auth.json"
 OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"

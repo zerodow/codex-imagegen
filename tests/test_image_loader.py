@@ -4,8 +4,8 @@ import base64
 
 import pytest
 
-from codex_imagegen import image_loader as il
-from codex_imagegen.errors import InputError
+from codex_imagegen.core import image_loader as il
+from codex_imagegen.core.errors import InputError
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
 JPEG = b"\xff\xd8\xff" + b"\x00" * 32
