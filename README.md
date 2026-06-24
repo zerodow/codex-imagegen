@@ -52,7 +52,8 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | `-i, --reference` | — | reference image for character/subject consistency (repeatable) |
 | `--size` | `1024x1024` | **hint only** — gpt-image-2 picks its own dimensions/aspect |
 | `--format` | `png` | `png` / `jpeg` / `webp` |
-| `--model` | `gpt-5.5` | parent model that hosts the image tool |
+| `--provider` | `codex` | image backend: `codex` \| `minimax` (see Providers below) |
+| `--model` | provider default | model override (codex → `gpt-5.5`, minimax → `image-01`) |
 | `--timeout` | `300` | total seconds; large images take 1–3 min |
 | `--stall-timeout` | `120` | abort if the stream goes silent this long |
 | `--quiet` | off | print only the saved path (no progress on stderr) |
@@ -95,6 +96,82 @@ continues — exit `4` if any scene failed, `0` otherwise.
 > **Consistency is strong but not perfect.** Subject identity (face, colors, outfit)
 > carries well; expect minor style/pose/detail drift between images. Passing multiple
 > reference angles (`-i a.png -i b.png`) improves it.
+
+## Merge characters (combine subjects from different images): `imagegen-merge`
+
+Take a subject from each of two or more images and render **one new image with all
+of them**. Pass `-i` per subject (≥2), describe the scene, and optionally label each
+reference (in order) and say how they should be arranged:
+
+```bash
+imagegen-merge "two friends in a sunlit cafe" \
+  -i alice.png -i robot.png \
+  --label "the woman in the red coat" --label "the robot mascot" \
+  --relation "sitting across a table, shaking hands" \
+  -o cafe.png
+```
+
+| Flag | Notes |
+|------|-------|
+| `-i, --reference` | subject image; repeat for each subject (need ≥2) |
+| `--label` | short label per `-i`, **same order** — disambiguates which subject is which (omit all, or one per reference) |
+| `--relation` | how the subjects are arranged / interact |
+| `--provider` | image backend (default `codex`) |
+
+Other flags (`-o`, `--size`, `--format`, `--model`, `--timeout`, `--quiet`) match `imagegen`.
+
+> **Both subjects must appear and keep their own faces** — the prompt explicitly asks
+> the model not to blend identities. It's still a generative model with no seed:
+> expect to re-roll occasionally, and label each subject to reduce mix-ups. Quality
+> degrades with too many subjects (capped per provider; Codex allows up to 4).
+
+### Vision assist (optional): caption + verify
+
+Add a vision model "in the middle" to improve merge quality. It **captions each
+reference** before generation (richer identity binding than manual `--label`s) and,
+with `--verify`, **checks the result** and regenerates with a correction if a subject
+is missing or faces are blended:
+
+```bash
+export MINIMAX_API_KEY=...          # MiniMax token-plan key (NOT the image PAYG key)
+imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
+  --vision minimax --verify --max-retries 2
+```
+
+| Flag | Notes |
+|------|-------|
+| `--vision {off,minimax}` | caption references before generating (default `off`); when on, captions replace `--label` |
+| `--verify` | check the result; retry on failure (requires `--vision`) |
+| `--max-retries N` | regeneration attempts when `--verify` fails (default 1) |
+
+> **Billing:** vision uses your MiniMax **token-plan** key (`MINIMAX_API_KEY`),
+> billed per token — separate from Codex image quota. Each `--verify` failure costs
+> one extra Codex image turn, so retries are capped and off by default.
+
+## Providers & billing
+
+`imagegen` / `imagegen-merge` take `--provider`. Each declares what it can do, and the
+merge command refuses any provider that can't composite multiple distinct subjects.
+
+| Provider | Generation | Multi-subject (merge) | Key / meter |
+|----------|-----------|------------------------|-------------|
+| `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `~/.codex/auth.json` — ChatGPT plan quota, no per-image cost |
+| `minimax` | Image-01 | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (~$0.0035/image) |
+
+> **`--format` with `minimax`:** Image-01 chooses its own encoding; if it doesn't
+> match `--format`, the byte check fails cleanly (exit 4) rather than writing a
+> mislabeled file. Use the format MiniMax returns, or stick with `codex` for strict
+> format control.
+
+```bash
+imagegen "a portrait, studio light" --provider minimax        # PAYG single image
+imagegen-merge ... --provider minimax                          # rejected: minimax can't merge
+```
+
+> **Three separate credentials, do not mix them:** Codex uses `~/.codex/auth.json`
+> (subscription); MiniMax **vision** uses `MINIMAX_API_KEY` (token plan); MiniMax
+> **image generation** uses `MINIMAX_IMAGE_API_KEY` (pay-as-you-go) — different meters,
+> different balances.
 
 ## Exit codes
 
