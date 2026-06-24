@@ -8,7 +8,7 @@ import argparse
 import sys
 
 from .cli import SIZE_HINTS  # reuse the same size-hint whitelist
-from .core import image_loader, image_writer
+from .core import env_file, image_loader, image_writer
 from .core.errors import ImagegenError, InputError
 from .features import merge
 from .providers import registry
@@ -87,6 +87,7 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    env_file.load_dotenv()  # pick up a project-local .env (real env vars still win)
     args = build_parser().parse_args(argv)
     progress = not args.quiet
     try:

@@ -6,7 +6,7 @@ Usage: imagegen "<prompt>" [-o out.png] [--size 1024x1024] [--format png]
 import argparse
 import sys
 
-from .core import image_loader, image_writer, orchestrator
+from .core import env_file, image_loader, image_writer, orchestrator
 from .core.errors import ImagegenError, InputError
 from .providers import registry
 from .providers.generate.base import GenIntent
@@ -65,6 +65,7 @@ def _validate_args(args: argparse.Namespace) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    env_file.load_dotenv()  # pick up a project-local .env (real env vars still win)
     args = build_parser().parse_args(argv)
     progress = not args.quiet
     try:

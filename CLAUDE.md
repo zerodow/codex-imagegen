@@ -70,7 +70,12 @@ Key facts to remember:
 ## Caveats
 
 - The Codex `codex/responses` endpoint is **unofficial** (the Codex CLI's backend) — may change; ToS gray area.
-- MiniMax endpoint URLs / model ids / response shapes are **isolated in each `client.py` and NOT yet
-  verified against a live key** — confirm against platform.minimax.io before relying on MiniMax paths.
+- MiniMax endpoint URLs / model ids / response shapes are **isolated in each `client.py`**. The
+  **vision (M3 chat) path is verified live** (2026-06-24); the **Image-01 generate path is still
+  unverified** against a live key — confirm against platform.minimax.io before relying on it.
+- MiniMax **M3 is a reasoning model**: it can emit `<think>…</think>` chain-of-thought. The vision
+  provider strips that (`_strip_reasoning`) before using captions/verdicts — keep that guard.
+- The vision **caption-before** step imports the reference's outfit/setting/pose, which can override
+  the target scene — a tradeoff (good for likeness, weak for scene control), not a bug.
 - `--size` is a hint (gpt-image-2 picks its own dimensions). MiniMax picks its own output encoding, so
   `--format` may mismatch (fails cleanly, exit 4) — use `codex` for strict format control.
