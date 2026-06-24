@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..core import image_loader, image_writer, orchestrator
+from ..core import env_file, image_loader, image_writer, orchestrator
 from ..core.errors import ImagegenError, InputError
 from ..providers import registry
 from ..providers.generate.base import GenIntent
@@ -60,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    env_file.load_dotenv()  # pick up a project-local .env (real env vars still win)
     args = build_parser().parse_args(argv)
     progress = not args.quiet
     if args.size not in SIZE_HINTS:

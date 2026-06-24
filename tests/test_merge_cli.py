@@ -124,6 +124,9 @@ def test_vision_flag_wires_vision_provider(monkeypatch, tmp_path):
 def test_vision_missing_key_exit3(monkeypatch, tmp_path):
     # Real providers: caption-before resolves the MiniMax key -> AuthError -> exit 3.
     # (Codex provider is built lazily and never reached; no network.)
+    # chdir to an empty dir so the CLI's .env autoloader can't re-supply the key
+    # from a developer's real project-root .env after we delete it here.
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("MINIMAX_API_KEY", raising=False)
     a, b = _ref(tmp_path, "a.png"), _ref(tmp_path, "b.png")
     out = str(tmp_path / "o.png")
