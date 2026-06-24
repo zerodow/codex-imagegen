@@ -87,6 +87,35 @@ def test_verify_malformed_reply_is_not_ok(monkeypatch):
     assert v.ok is False and "totally not json" in v.reasons
 
 
+def test_describe_strips_think_reasoning(monkeypatch):
+    monkeypatch.setattr(prov_mod.client, "resolve_api_key", lambda: "k")
+    monkeypatch.setattr(
+        prov_mod.client, "chat_with_image",
+        lambda key, **kw: "<think>\nThe user wants a compact line. Let me look...\n</think>\nwoman with a short black bob",
+    )
+    d = MiniMaxVisionProvider().describe_subject("b64", "image/png")
+    assert d.text == "woman with a short black bob"  # reasoning stripped
+
+
+def test_describe_unclosed_think_collapses_to_empty(monkeypatch):
+    monkeypatch.setattr(prov_mod.client, "resolve_api_key", lambda: "k")
+    monkeypatch.setattr(prov_mod.client, "chat_with_image", lambda key, **kw: "<think>still thinking, never answered")
+    d = MiniMaxVisionProvider().describe_subject("b64", "image/png")
+    assert d.text == ""  # better empty than reasoning garbage as a label
+
+
+def test_verify_strips_think_before_json(monkeypatch):
+    monkeypatch.setattr(prov_mod.client, "resolve_api_key", lambda: "k")
+    # Reasoning contains a stray brace {maybe}; without stripping, the greedy JSON
+    # extractor would span from it into the real object and break the parse.
+    monkeypatch.setattr(
+        prov_mod.client, "chat_with_image",
+        lambda key, **kw: '<think>could be {maybe} ok</think>{"ok": true, "blended": false, "missing": [], "reasons": "fine"}',
+    )
+    v = MiniMaxVisionProvider().verify_composition("b", "image/png", expected=["a", "b"])
+    assert v.ok is True and v.blended is False and v.missing == []
+
+
 def test_parse_verdict_empty_is_not_ok():
     assert _parse_verdict("") == CompositionVerdict(ok=False, reasons="no response")
 

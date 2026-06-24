@@ -150,6 +150,12 @@ imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
 > `MINIMAX_API_KEY`. It does **not** consume Codex's image quota. Each `--verify` failure
 > costs one extra Codex image turn, so retries are capped and off by default.
 
+> **Captions can bleed context.** With `--vision` on, each reference is captioned in
+> detail — this sharpens likeness, but it also carries the reference's *outfit, setting,
+> and pose* into the result and can override the scene you asked for. Ideal when you want
+> faithful reproduction; prefer minimal manual `--label`s (vision off) when the new scene
+> must dominate.
+
 ## Providers & billing
 
 `imagegen` / `imagegen-merge` take `--provider`. Each declares what it can do, and the
