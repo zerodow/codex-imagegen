@@ -126,6 +126,21 @@ def test_build_payload_compose_blank_label_falls_back_to_generic():
     assert "(Bob)" in text
 
 
+def test_build_payload_edit_attaches_source_and_templates_preservation():
+    refs = [("SRCDATA", "image/png")]
+    payload = rc.build_payload(
+        "make the cap red", "auto", "png", "gpt-5.5", refs=refs, intent=GenIntent.EDIT
+    )
+    assert payload["tool_choice"] == "required"  # forced for edit framing
+    content = payload["input"][0]["content"]
+    assert content[0]["type"] == "input_image"
+    assert content[0]["image_url"] == "data:image/png;base64,SRCDATA"
+    assert content[-1]["type"] == "input_text"
+    text = content[-1]["text"]
+    assert "make the cap red" in text  # the user delta
+    assert "Preserve everything else" in text  # the load-bearing preservation clause
+
+
 def test_build_headers_includes_required_fields():
     headers = rc.build_headers("tok", "acc", "0.141.0")
     assert headers["Authorization"] == "Bearer tok"
@@ -172,6 +187,35 @@ def test_post_once_no_image_raises(monkeypatch):
     monkeypatch.setattr(rc, "_stream", lambda *a, **k: iter([{"type": "response.created"}]))
     with pytest.raises(GatewayError):
         rc._post_once({}, {}, 10, 5, False)
+
+
+def test_post_once_captures_usage_and_models_from_completed(monkeypatch):
+    b64 = base64.b64encode(_REAL_PNG).decode()
+    events = [
+        {"type": "response.output_item.done",
+         "item": {"type": "image_generation_call", "result": b64}},
+        {"type": "response.completed", "response": {
+            "model": "gpt-5.5",
+            "usage": {"input_tokens": 2299, "output_tokens": 28, "total_tokens": 2327},
+            "tool_usage": {"image_gen": {"input_tokens": 15, "output_tokens": 229, "total_tokens": 244}},
+            "tools": [{"type": "image_generation", "model": "gpt-image-2-codex"}],
+        }},
+    ]
+    monkeypatch.setattr(rc, "_stream", lambda *a, **k: iter(events))
+    data, meta = rc._post_once({}, {}, 10, 5, False)
+    assert data == _REAL_PNG
+    assert meta["usage"]["total_tokens"] == 2327
+    assert meta["image_usage"]["total_tokens"] == 244
+    assert meta["models"] == {"orchestrator": "gpt-5.5", "image": "gpt-image-2-codex"}
+    assert "elapsed_s" in meta
+
+
+def test_post_once_usage_absent_is_safe(monkeypatch):
+    # No response.completed -> no usage keys, but elapsed_s is always present.
+    monkeypatch.setattr(rc, "_stream", lambda *a, **k: iter(_success_events()))
+    _data, meta = rc._post_once({}, {}, 10, 5, False)
+    assert "usage" not in meta and "image_usage" not in meta
+    assert "elapsed_s" in meta
 
 
 def test_generate_refreshes_on_401_and_retries_with_new_token(monkeypatch):

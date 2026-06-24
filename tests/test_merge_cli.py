@@ -53,7 +53,7 @@ def test_success_writes_file_and_passes_compose_args(monkeypatch, tmp_path):
         captured["labels"] = kwargs.get("labels")
         captured["relation"] = kwargs.get("relation")
         Path(out_path).write_bytes(_PNG)
-        return Path(out_path)
+        return Path(out_path), {}
 
     monkeypatch.setattr(merge_cli.merge, "run", fake_run)
     code = merge_cli.main([
@@ -108,7 +108,7 @@ def test_vision_flag_wires_vision_provider(monkeypatch, tmp_path):
         captured["verify"] = kwargs.get("verify")
         captured["max_retries"] = kwargs.get("max_retries")
         Path(out_path).write_bytes(_PNG)
-        return Path(out_path)
+        return Path(out_path), {}
 
     monkeypatch.setattr(merge_cli.merge, "run", fake_run)
     monkeypatch.setattr(merge_cli.registry, "get_vision_provider", lambda name: sentinel)
@@ -141,7 +141,7 @@ def test_default_no_vision_passes_none(monkeypatch, tmp_path):
     def fake_run(provider, scene, out_path, **kwargs):
         captured["vision"] = kwargs.get("vision")
         Path(out_path).write_bytes(_PNG)
-        return Path(out_path)
+        return Path(out_path), {}
 
     monkeypatch.setattr(merge_cli.merge, "run", fake_run)
     assert merge_cli.main(["scene", "-i", a, "-i", b, "-o", str(out)]) == 0

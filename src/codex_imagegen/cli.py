@@ -6,7 +6,7 @@ Usage: imagegen "<prompt>" [-o out.png] [--size 1024x1024] [--format png]
 import argparse
 import sys
 
-from .core import env_file, image_loader, image_writer, orchestrator
+from .core import env_file, image_loader, image_writer, orchestrator, output_report
 from .core.errors import ImagegenError, InputError
 from .providers import registry
 from .providers.generate.base import GenIntent
@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Max seconds of stream silence before aborting (default: {DEFAULT_STALL_TIMEOUT})",
     )
     parser.add_argument("--quiet", action="store_true", help="Suppress progress; print only the saved path")
+    parser.add_argument("--json", action="store_true", help="Print a JSON report (path, dims, token usage) instead of the human block")
     return parser
 
 
@@ -74,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         intent = GenIntent.CONSISTENCY if refs else GenIntent.PLAIN
         out_path = image_writer.resolve_output_path(args.output, args.prompt, args.fmt)
         provider = registry.get_image_provider(args.provider, model=args.model)
-        orchestrator.generate_to_file(
+        _path, meta = orchestrator.generate_to_file(
             provider,
             args.prompt,
             out_path,
@@ -92,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 - last resort: never leak a traceback
         print(f"imagegen: unexpected error: {exc}", file=sys.stderr)
         return 1
-    print(out_path)
+    print(output_report.result_line(out_path, meta, as_json=args.json, quiet=args.quiet))
     return 0
 
 

@@ -57,12 +57,32 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | `--timeout` | `300` | total seconds; large images take 1–3 min |
 | `--stall-timeout` | `120` | abort if the stream goes silent this long |
 | `--quiet` | off | print only the saved path (no progress on stderr) |
+| `--json` | off | print a JSON report (path, real dimensions, token usage) instead of the human block |
 
 Examples:
 ```bash
 imagegen "coffee shop logo, minimal, gold on black" -o brand/logo.png
 imagegen "isometric city block, low-poly" --size 1536x1024 --quiet
 ```
+
+### Output & token report
+
+On success every command prints a structured block with the **actual** output
+dimensions (gpt-image-2 ignores the size hint) and the **per-image token cost** the
+backend reports — `image` is the image-generation cost, `llm` the orchestration:
+
+```
+✓ saved   generated/2026-06-24/red-square-150142.png
+  model   gpt-image-2-codex (via gpt-5.5)
+  result  generate · quality auto · 1024×1024
+  image   in 15 (img 0 / txt 15) · out 229 (img 229) · total 244 tok
+  llm     2327 tok (in 2299 / out 28)
+  time    18.2s
+```
+
+`--quiet` prints only the path; `--json` emits the same data as machine-readable JSON
+(it wins if both are passed). `imagegen-character` prints a per-image line plus an
+aggregate token/time total for the batch.
 
 ## Character consistency (same character across images)
 
@@ -156,9 +176,31 @@ imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
 > faithful reproduction; prefer minimal manual `--label`s (vision off) when the new scene
 > must dominate.
 
+## Edit an existing image: `imagegen-edit`
+
+Modify **one** source image from a text instruction — recolor, add, or remove
+something — applying *only* that change and keeping the rest:
+
+```bash
+imagegen-edit "make the cap and hoodie red" -i fox.png -o fox-red.png
+imagegen-edit "remove the speech bubble and add round glasses" -i fox.png
+```
+
+| Flag | Notes |
+|------|-------|
+| `-i, --reference` | the source image to edit (**exactly one**) |
+| `--provider` | image backend (default `codex`; must support editing) |
+
+Other flags (`-o`, `--size`, `--format`, `--model`, `--timeout`, `--quiet`) match `imagegen`.
+
+> **Edit = regeneration, not pixel-lock.** The model redraws the image conditioned on
+> the source, so unmodified regions are reproduced *near*-identically (minor drift on
+> fine text / line work). A **non-standard input size is rescaled** to the backend's own
+> resolution. For pixel-exact preservation, mask-based edits are a future addition.
+
 ## Providers & billing
 
-`imagegen` / `imagegen-merge` take `--provider`. Each declares what it can do, and the
+`imagegen` / `imagegen-merge` / `imagegen-edit` take `--provider`. Each declares what it can do, and the
 merge command refuses any provider that can't composite multiple distinct subjects.
 
 | Provider | Generation | Multi-subject (merge) | Key / meter |

@@ -1,5 +1,6 @@
 """Character batch: scene parsing + baseline/scene orchestration (generation mocked)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -132,3 +133,24 @@ def test_scene_failure_reported_as_exit4(tmp_path, monkeypatch):
         "--scenes", str(scenes), "--outdir", str(tmp_path / "out"), "--quiet",
     ])
     assert code == 4  # batch completes, failures surfaced via exit code
+
+
+def test_all_fail_batch_json_still_emits_parseable_report(tmp_path, monkeypatch, capsys):
+    # --json must always print a parseable report, even when every scene failed.
+    scenes = tmp_path / "s.txt"
+    scenes.write_text("scene A\n")
+    base = tmp_path / "base.png"
+    base.write_bytes(PNG)
+
+    def boom(*args, **kwargs):
+        raise InputError("simulated scene failure")
+
+    monkeypatch.setattr(pipeline.registry, "get_image_provider", lambda *a, **k: object())
+    monkeypatch.setattr(pipeline.orchestrator, "generate_to_file", boom)
+    code = pipeline.main([
+        "--name", "Robo", "--baseline-image", str(base),
+        "--scenes", str(scenes), "--outdir", str(tmp_path / "out"), "--json",
+    ])
+    assert code == 4
+    payload = json.loads(capsys.readouterr().out)  # stdout is valid JSON, not empty
+    assert payload["images"] == [] and payload["totals"]["count"] == 0
