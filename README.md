@@ -181,6 +181,17 @@ imagegen-merge ... --provider minimax                          # rejected: minim
 > MiniMax keys are separate env vars. If one key/account has both token-plan and PAYG
 > balance, you can reuse the same key for both.
 
+### Where to put the keys: a project `.env`
+
+Put the MiniMax keys in a `.env` at the project root (it's gitignored) — it's loaded
+automatically when you run a command from the project root, and a real exported variable
+always wins over the file. Copy `.env.example` to start. Never paste a key into source code.
+(Codex still uses `~/.codex/auth.json`, not `.env`.)
+
+```bash
+cp .env.example .env   # then fill in MINIMAX_API_KEY / MINIMAX_IMAGE_API_KEY
+```
+
 ## Exit codes
 
 | Code | Meaning |
