@@ -26,6 +26,8 @@ release-manifest.json
 /generated/
 /characters/
 /examples/**/*.png
+# edit-quality eval harness outputs (throwaway: generated images + manifest/html)
+/eval-out/
 
 # next.js
 /.next/
