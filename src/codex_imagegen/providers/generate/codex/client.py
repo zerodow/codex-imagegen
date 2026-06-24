@@ -17,7 +17,8 @@ import uuid
 from typing import Iterator
 
 from . import auth as _auth
-from .errors import GatewayError
+from codex_imagegen.core.errors import GatewayError
+from codex_imagegen.providers.generate.base import GenIntent
 
 CODEX_BACKEND = "https://chatgpt.com/backend-api/codex/responses"
 DEFAULT_MODEL = "gpt-5.5"
@@ -67,22 +68,58 @@ def build_headers(token: str, account_id: str | None, version: str) -> dict[str,
     return headers
 
 
+# Ordinal words for the first few references; beyond this we fall back to "#N".
+_ORDINALS = ("FIRST", "SECOND", "THIRD", "FOURTH", "FIFTH", "SIXTH")
+
+
+def _compose_user_text(prompt: str, n_refs: int, labels: list[str], relation: str | None) -> str:
+    """Build the multi-subject merge instruction: each reference is a DISTINCT
+    character that must appear, with faces kept separate (no identity blending)."""
+    lines = []
+    for i in range(n_refs):
+        ordinal = _ORDINALS[i] if i < len(_ORDINALS) else f"#{i + 1}"
+        raw_label = labels[i].strip() if i < len(labels) and labels[i] else ""
+        label = raw_label or f"the subject in reference image {i + 1}"
+        lines.append(f" - Character {i + 1} = the subject in the {ordinal} reference image ({label})")
+    relation_text = relation.strip() if relation and relation.strip() else "together in the scene"
+    return (
+        f"Create ONE new image containing {n_refs} DISTINCT characters, all clearly visible:\n"
+        + "\n".join(lines)
+        + "\nEach character MUST appear. Preserve each one's OWN face, hair, outfit, colors, "
+        "and art style. DO NOT blend or merge their faces into a single person. "
+        f"Arrange them: {relation_text}. Scene: {prompt}. "
+        "Do not copy any reference background. Return only the image."
+    )
+
+
 def build_payload(
     prompt: str,
     size: str,
     output_format: str,
     model: str,
     refs: list[tuple[str, str]] | None = None,
+    intent: GenIntent = GenIntent.PLAIN,
+    labels: list[str] | None = None,
+    relation: str | None = None,
 ) -> dict:
     """Build the codex/responses body that wires a single image_generation tool.
 
-    When `refs` (list of (base64, mime)) is given, each is attached as an
-    `input_image` content part for character/subject consistency, the prompt is
-    framed as "same subject as the reference", and the image tool is forced
-    (`tool_choice: "required"`).
+    `intent` chooses the prompt framing (the caller decides; this function owns
+    the wording). CONSISTENCY/COMPOSE attach each `refs` entry (base64, mime) as
+    an `input_image` content part and force the tool (`tool_choice: "required"`);
+    PLAIN sends prompt-only with `tool_choice: "auto"`. COMPOSE also uses
+    `labels` (paired to refs, in order) and `relation` to disambiguate subjects.
     """
     refs = refs or []
-    if refs:
+    if intent is GenIntent.COMPOSE:
+        user_text = _compose_user_text(prompt, len(refs), labels or [], relation)
+        content: list[dict] = [
+            {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
+            for (b64, mime) in refs
+        ]
+        content.append({"type": "input_text", "text": user_text})
+        tool_choice = "required"
+    elif intent is GenIntent.CONSISTENCY:
         user_text = (
             "Generate a NEW image of the SAME character/subject shown in the reference "
             "image(s). Keep their appearance consistent — face, hair, body, outfit, "
@@ -96,7 +133,7 @@ def build_payload(
         ]
         content.append({"type": "input_text", "text": user_text})
         tool_choice = "required"
-    else:
+    else:  # GenIntent.PLAIN
         user_text = (
             "Use the image_generation tool to render the following image. "
             f"Return only the image, no commentary. Prompt: {prompt}"
@@ -269,14 +306,21 @@ def generate_image_bytes(
     stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     progress: bool = False,
     refs: list[tuple[str, str]] | None = None,
+    intent: GenIntent = GenIntent.PLAIN,
+    labels: list[str] | None = None,
+    relation: str | None = None,
 ) -> tuple[bytes, dict]:
     """Generate one image; return (image_bytes, item_metadata).
 
-    `refs` (list of (base64, mime)) attaches reference images for subject
-    consistency. Refreshes the access token once and retries on HTTP 401.
+    `refs` (list of (base64, mime)) attaches reference images; `intent` frames
+    the prompt (`labels`/`relation` apply to COMPOSE). Refreshes the access token
+    once and retries on HTTP 401.
     """
     version = codex_version()
-    payload = build_payload(prompt, size, output_format, model, refs=refs)
+    payload = build_payload(
+        prompt, size, output_format, model,
+        refs=refs, intent=intent, labels=labels, relation=relation,
+    )
     headers = build_headers(access_token, account_id, version)
     try:
         return _post_once(headers, payload, total_timeout, stall_timeout, progress)

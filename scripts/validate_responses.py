@@ -11,8 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from codex_imagegen import auth as A  # noqa: E402
-from codex_imagegen.responses_client import generate_image_bytes  # noqa: E402
+from codex_imagegen.providers.generate.codex import auth as A  # noqa: E402
+from codex_imagegen.providers.generate.codex.client import generate_image_bytes  # noqa: E402
 
 OUT = Path("/tmp/validate-cat.png")
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"

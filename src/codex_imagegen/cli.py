@@ -6,9 +6,11 @@ Usage: imagegen "<prompt>" [-o out.png] [--size 1024x1024] [--format png]
 import argparse
 import sys
 
-from . import generator, image_loader, image_writer
-from .errors import ImagegenError, InputError
-from .responses_client import DEFAULT_MODEL, DEFAULT_STALL_TIMEOUT, DEFAULT_TOTAL_TIMEOUT
+from .core import image_loader, image_writer, orchestrator
+from .core.errors import ImagegenError, InputError
+from .providers import registry
+from .providers.generate.base import GenIntent
+from .providers.generate.codex.client import DEFAULT_STALL_TIMEOUT, DEFAULT_TOTAL_TIMEOUT
 
 # gpt-image-2 treats size as a hint, not a hard constraint (it may return a
 # different aspect). These are the accepted hint values; "auto" lets it choose.
@@ -39,7 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--format", default="png", choices=["png", "jpeg", "webp"], dest="fmt",
         help="Output image format (default: png)",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Parent model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--provider", default="codex", help="Image provider: codex | minimax (default: codex)")
+    parser.add_argument("--model", default=None, help="Model override (default: the provider's own default)")
     parser.add_argument(
         "--timeout", type=int, default=DEFAULT_TOTAL_TIMEOUT,
         help=f"Total wall-clock budget in seconds (default: {DEFAULT_TOTAL_TIMEOUT}); large images take 1-3 min",
@@ -67,14 +70,17 @@ def main(argv: list[str] | None = None) -> int:
     try:
         _validate_args(args)
         refs = image_loader.load_references(args.reference) if args.reference else None
+        intent = GenIntent.CONSISTENCY if refs else GenIntent.PLAIN
         out_path = image_writer.resolve_output_path(args.output, args.prompt, args.fmt)
-        generator.generate_to_file(
+        provider = registry.get_image_provider(args.provider, model=args.model)
+        orchestrator.generate_to_file(
+            provider,
             args.prompt,
             out_path,
             refs=refs,
+            intent=intent,
             size=args.size,
             fmt=args.fmt,
-            model=args.model,
             total_timeout=args.timeout,
             stall_timeout=args.stall_timeout,
             progress=progress,

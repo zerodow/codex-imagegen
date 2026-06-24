@@ -1,0 +1,1 @@
+"""providers.generate.minimax package."""

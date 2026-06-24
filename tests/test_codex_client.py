@@ -6,8 +6,9 @@ import time
 
 import pytest
 
-from codex_imagegen import responses_client as rc
-from codex_imagegen.errors import GatewayError
+from codex_imagegen.providers.generate.codex import client as rc
+from codex_imagegen.providers.generate.base import GenIntent
+from codex_imagegen.core.errors import GatewayError
 
 _REAL_PNG = b"\x89PNG\r\n\x1a\nDATA"
 
@@ -69,14 +70,60 @@ def test_build_payload_auto_size_omits_size():
     assert "size" not in payload["tools"][0]
 
 
-def test_build_payload_with_refs_forces_tool_and_attaches_image():
+def test_build_payload_consistency_forces_tool_and_attaches_image():
     refs = [("BASE64DATA", "image/png")]
-    payload = rc.build_payload("a cat in space", "auto", "png", "gpt-5.5", refs=refs)
-    assert payload["tool_choice"] == "required"  # forced when references present
+    payload = rc.build_payload(
+        "a cat in space", "auto", "png", "gpt-5.5", refs=refs, intent=GenIntent.CONSISTENCY
+    )
+    assert payload["tool_choice"] == "required"  # forced for consistency framing
     content = payload["input"][0]["content"]
     assert content[0]["type"] == "input_image"
     assert content[0]["image_url"] == "data:image/png;base64,BASE64DATA"
     assert content[-1]["type"] == "input_text"
+    # Regression lock: the single-subject wording the character pipeline relies on.
+    assert content[-1]["text"].startswith("Generate a NEW image of the SAME character/subject")
+
+
+def test_build_payload_compose_attaches_all_refs_in_order_with_labels():
+    refs = [("AAA", "image/png"), ("BBB", "image/jpeg")]
+    payload = rc.build_payload(
+        "in a cafe", "auto", "png", "gpt-5.5",
+        refs=refs, intent=GenIntent.COMPOSE,
+        labels=["the woman in red", "the robot mascot"], relation="shaking hands",
+    )
+    assert payload["tool_choice"] == "required"
+    content = payload["input"][0]["content"]
+    # All references attached as input_image, in order, before the text part.
+    assert content[0]["image_url"] == "data:image/png;base64,AAA"
+    assert content[1]["image_url"] == "data:image/jpeg;base64,BBB"
+    assert content[-1]["type"] == "input_text"
+    text = content[-1]["text"]
+    assert "2 DISTINCT characters" in text
+    assert "FIRST reference" in text and "SECOND reference" in text
+    assert "the woman in red" in text and "the robot mascot" in text
+    assert "shaking hands" in text
+    assert "DO NOT blend" in text
+    assert "in a cafe" in text
+
+
+def test_build_payload_compose_without_labels_uses_generic_subjects():
+    refs = [("A", "image/png"), ("B", "image/png")]
+    payload = rc.build_payload("scene", "auto", "png", "m", refs=refs, intent=GenIntent.COMPOSE)
+    text = payload["input"][0]["content"][-1]["text"]
+    assert "the subject in reference image 1" in text
+    assert "the subject in reference image 2" in text
+    assert "together in the scene" in text  # default relation
+
+
+def test_build_payload_compose_blank_label_falls_back_to_generic():
+    refs = [("A", "image/png"), ("B", "image/png")]
+    payload = rc.build_payload(
+        "scene", "auto", "png", "m", refs=refs, intent=GenIntent.COMPOSE, labels=["   ", "Bob"]
+    )
+    text = payload["input"][0]["content"][-1]["text"]
+    assert "(   )" not in text  # whitespace-only label must not render verbatim
+    assert "the subject in reference image 1" in text  # fell back
+    assert "(Bob)" in text
 
 
 def test_build_headers_includes_required_fields():
