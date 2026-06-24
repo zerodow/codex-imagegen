@@ -150,6 +150,12 @@ imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
 > `MINIMAX_API_KEY`. It does **not** consume Codex's image quota. Each `--verify` failure
 > costs one extra Codex image turn, so retries are capped and off by default.
 
+> **Captions can bleed context.** With `--vision` on, each reference is captioned in
+> detail — this sharpens likeness, but it also carries the reference's *outfit, setting,
+> and pose* into the result and can override the scene you asked for. Ideal when you want
+> faithful reproduction; prefer minimal manual `--label`s (vision off) when the new scene
+> must dominate.
+
 ## Providers & billing
 
 `imagegen` / `imagegen-merge` take `--provider`. Each declares what it can do, and the
@@ -180,6 +186,17 @@ imagegen-merge ... --provider minimax                          # rejected: minim
 > The token plan covers vision but *not* image generation — that's the only reason the two
 > MiniMax keys are separate env vars. If one key/account has both token-plan and PAYG
 > balance, you can reuse the same key for both.
+
+### Where to put the keys: a project `.env`
+
+Put the MiniMax keys in a `.env` at the project root (it's gitignored) — it's loaded
+automatically when you run a command from the project root, and a real exported variable
+always wins over the file. Copy `.env.example` to start. Never paste a key into source code.
+(Codex still uses `~/.codex/auth.json`, not `.env`.)
+
+```bash
+cp .env.example .env   # then fill in MINIMAX_API_KEY / MINIMAX_IMAGE_API_KEY
+```
 
 ## Exit codes
 
