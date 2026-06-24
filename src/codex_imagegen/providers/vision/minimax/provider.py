@@ -22,6 +22,19 @@ _VERIFY_SYSTEM = "You are a strict image-composition checker. Reply with ONLY a 
 # Pull the first {...} block out of a possibly chatty reply.
 _JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 
+# MiniMax M3 is a reasoning model: it may wrap chain-of-thought in <think>...</think>
+# before the real answer. Strip those so captions/verdicts use the answer, not the
+# reasoning (and so a stray brace inside the reasoning can't fool the JSON extractor).
+_THINK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_OPEN_THINK_RE = re.compile(r"<think>.*", re.DOTALL | re.IGNORECASE)
+
+
+def _strip_reasoning(text: str) -> str:
+    """Remove <think> blocks. An unclosed <think> (no answer emitted) collapses to ''."""
+    cleaned = _THINK_RE.sub("", text or "")
+    cleaned = _OPEN_THINK_RE.sub("", cleaned)  # drop a dangling, never-closed <think>
+    return cleaned.strip()
+
 
 class MiniMaxVisionProvider:
     name = "minimax"
@@ -44,7 +57,7 @@ class MiniMaxVisionProvider:
             mime=mime,
             timeout=self._timeout,
         )
-        return SubjectDescription(text=(text or "").strip())
+        return SubjectDescription(text=_strip_reasoning(text))
 
     def verify_composition(
         self, image_b64: str, mime: str, *, expected: list[str]
@@ -70,7 +83,8 @@ class MiniMaxVisionProvider:
 
 def _parse_verdict(raw: str) -> CompositionVerdict:
     """Defensively parse the verifier reply; never raise — a bad reply means 'not ok'."""
-    match = _JSON_RE.search(raw or "")
+    raw = _strip_reasoning(raw)
+    match = _JSON_RE.search(raw)
     if not match:
         return CompositionVerdict(ok=False, reasons=(raw or "").strip()[:200] or "no response")
     try:
