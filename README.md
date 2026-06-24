@@ -133,7 +133,7 @@ with `--verify`, **checks the result** and regenerates with a correction if a su
 is missing or faces are blended:
 
 ```bash
-export MINIMAX_API_KEY=...          # MiniMax token-plan key (NOT the image PAYG key)
+export MINIMAX_API_KEY=...          # your MiniMax token-plan key — M3 vision is token-metered, so the plan covers it
 imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
   --vision minimax --verify --max-retries 2
 ```
@@ -144,9 +144,11 @@ imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
 | `--verify` | check the result; retry on failure (requires `--vision`) |
 | `--max-retries N` | regeneration attempts when `--verify` fails (default 1) |
 
-> **Billing:** vision uses your MiniMax **token-plan** key (`MINIMAX_API_KEY`),
-> billed per token — separate from Codex image quota. Each `--verify` failure costs
-> one extra Codex image turn, so retries are capped and off by default.
+> **Billing — it's the *meter*, not the key type.** "API key" just means the credential
+> string; it is sent as `Authorization: Bearer …`. M3 vision is billed **per token**, so
+> your **MiniMax token plan covers it** — put your token-plan subscription key in
+> `MINIMAX_API_KEY`. It does **not** consume Codex's image quota. Each `--verify` failure
+> costs one extra Codex image turn, so retries are capped and off by default.
 
 ## Providers & billing
 
@@ -168,10 +170,16 @@ imagegen "a portrait, studio light" --provider minimax        # PAYG single imag
 imagegen-merge ... --provider minimax                          # rejected: minimax can't merge
 ```
 
-> **Three separate credentials, do not mix them:** Codex uses `~/.codex/auth.json`
-> (subscription); MiniMax **vision** uses `MINIMAX_API_KEY` (token plan); MiniMax
-> **image generation** uses `MINIMAX_IMAGE_API_KEY` (pay-as-you-go) — different meters,
-> different balances.
+> **Three credentials — split by billing *meter*, not auth type.** All three are just
+> Bearer keys; what differs is what each covers:
+> - **Codex** → `~/.codex/auth.json` — ChatGPT subscription quota.
+> - **MiniMax vision (M3)** → `MINIMAX_API_KEY` — **token-metered, so your token plan covers it.**
+> - **MiniMax image gen (Image-01)** → `MINIMAX_IMAGE_API_KEY` — **per-image meter, NOT
+>   covered by the token plan**, so it needs a pay-as-you-go balance.
+>
+> The token plan covers vision but *not* image generation — that's the only reason the two
+> MiniMax keys are separate env vars. If one key/account has both token-plan and PAYG
+> balance, you can reuse the same key for both.
 
 ## Exit codes
 
