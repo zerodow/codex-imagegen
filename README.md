@@ -1,5 +1,10 @@
 # codex-imagegen
 
+![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Runtime deps: none](https://img.shields.io/badge/runtime%20deps-none%20(stdlib)-lightgrey)
+![Status: experimental](https://img.shields.io/badge/status-experimental-orange)
+
 Generate an image from a text prompt using **your ChatGPT subscription** — no
 `OPENAI_API_KEY`, no per-image API billing. One command:
 
@@ -10,6 +15,14 @@ imagegen "a watercolor cat sitting on a sunny windowsill" -o cat.png
 It calls `gpt-image-2` through the Codex Responses backend, reusing the OAuth
 token Codex already stored when you ran `codex login`. Image generation consumes
 your ChatGPT plan quota (it does **not** hit the paid Images API).
+
+> ⚠️ **Disclaimer — unofficial, use at your own risk.** This is an independent,
+> community project. It is **not affiliated with, endorsed by, or supported by OpenAI,
+> ChatGPT, or MiniMax.** It talks to `chatgpt.com/backend-api/codex/responses` — the
+> **undocumented** backend the Codex CLI uses, not a public API. That endpoint can change
+> or break at any time, and automating it may fall outside OpenAI's terms of service for
+> your account. You are responsible for your own usage and quota. Intended for personal
+> and educational use, with no warranty (see [License](#license)).
 
 ## How it works
 
@@ -37,8 +50,19 @@ This tool talks to the same backend the Codex CLI uses, directly.
 ## Install
 
 ```bash
-pip install -e .          # exposes the `imagegen` command
+# from a clone
+git clone https://github.com/zerodow/codex-imagegen.git
+cd codex-imagegen
+pip install .          # exposes imagegen / imagegen-character / imagegen-merge / imagegen-edit
+
+# …or straight from GitHub
+pip install "git+https://github.com/zerodow/codex-imagegen.git"
+
+# …or isolate the CLI with pipx (recommended)
+pipx install "git+https://github.com/zerodow/codex-imagegen.git"
 ```
+
+> Hacking on it? Use an editable + test install instead: `pip install -e ".[dev]"`.
 
 ## Usage
 
@@ -57,12 +81,32 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | `--timeout` | `300` | total seconds; large images take 1–3 min |
 | `--stall-timeout` | `120` | abort if the stream goes silent this long |
 | `--quiet` | off | print only the saved path (no progress on stderr) |
+| `--json` | off | print a JSON report (path, real dimensions, token usage) instead of the human block |
 
 Examples:
 ```bash
 imagegen "coffee shop logo, minimal, gold on black" -o brand/logo.png
 imagegen "isometric city block, low-poly" --size 1536x1024 --quiet
 ```
+
+### Output & token report
+
+On success every command prints a structured block with the **actual** output
+dimensions (gpt-image-2 ignores the size hint) and the **per-image token cost** the
+backend reports — `image` is the image-generation cost, `llm` the orchestration:
+
+```
+✓ saved   generated/2026-06-24/red-square-150142.png
+  model   gpt-image-2-codex (via gpt-5.5)
+  result  generate · quality auto · 1024×1024
+  image   in 15 (img 0 / txt 15) · out 229 (img 229) · total 244 tok
+  llm     2327 tok (in 2299 / out 28)
+  time    18.2s
+```
+
+`--quiet` prints only the path; `--json` emits the same data as machine-readable JSON
+(it wins if both are passed). `imagegen-character` prints a per-image line plus an
+aggregate token/time total for the batch.
 
 ## Character consistency (same character across images)
 
@@ -156,15 +200,43 @@ imagegen-merge "two friends in a cafe" -i alice.png -i robot.png \
 > faithful reproduction; prefer minimal manual `--label`s (vision off) when the new scene
 > must dominate.
 
+## Edit an existing image: `imagegen-edit`
+
+Modify **one** source image from a text instruction — recolor, add, or remove
+something — applying *only* that change and keeping the rest:
+
+```bash
+imagegen-edit "make the cap and hoodie red" -i fox.png -o fox-red.png
+imagegen-edit "remove the speech bubble and add round glasses" -i fox.png
+```
+
+| Flag | Notes |
+|------|-------|
+| `-i, --reference` | the source image to edit (**exactly one**) |
+| `--provider` | image backend (default `codex`; must support editing) |
+
+Other flags (`-o`, `--size`, `--format`, `--model`, `--timeout`, `--quiet`) match `imagegen`.
+
+> **Edit = regeneration, not pixel-lock.** The model redraws the image conditioned on
+> the source, so unmodified regions are reproduced *near*-identically (minor drift on
+> fine text / line work). A **non-standard input size is rescaled** to the backend's own
+> resolution. For pixel-exact preservation, mask-based edits are a future addition.
+
 ## Providers & billing
 
-`imagegen` / `imagegen-merge` take `--provider`. Each declares what it can do, and the
+`imagegen` / `imagegen-merge` / `imagegen-edit` take `--provider`. Each declares what it can do, and the
 merge command refuses any provider that can't composite multiple distinct subjects.
 
 | Provider | Generation | Multi-subject (merge) | Key / meter |
 |----------|-----------|------------------------|-------------|
 | `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `~/.codex/auth.json` — ChatGPT plan quota, no per-image cost |
-| `minimax` | Image-01 | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (~$0.0035/image) |
+| `minimax` | Image-01 *(experimental)* | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (per [MiniMax pricing](https://platform.minimax.io)) |
+
+> **MiniMax image generation is experimental / unverified.** The vision (caption +
+> verify) path is verified against a live key; the **Image-01 *generation* path is not
+> yet confirmed live** — its model id and request/response shapes may differ from what
+> this tool sends. Check [platform.minimax.io](https://platform.minimax.io) before relying
+> on it. `codex` is the supported default.
 
 > **`--format` with `minimax`:** Image-01 chooses its own encoding; if it doesn't
 > match `--format`, the byte check fails cleanly (exit 4) rather than writing a
@@ -229,3 +301,13 @@ python3 scripts/validate_responses.py    # writes /tmp/validate-cat.png
 pip install -e ".[dev]"
 PYTHONPATH=src python3 -m pytest tests/ -q
 ```
+
+## License
+
+[MIT](LICENSE). Provided "as is", without warranty of any kind. Using an undocumented
+endpoint is at your own risk — see the disclaimer at the top.
+
+---
+
+Not affiliated with OpenAI or MiniMax. "ChatGPT", "Codex", "gpt-image-2", and related
+marks belong to their respective owners.

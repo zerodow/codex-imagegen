@@ -15,7 +15,9 @@ from codex_imagegen.providers.generate.base import GenCapabilities, GenIntent
 _CODEX_CAPABILITIES = GenCapabilities(
     max_refs=4,
     multi_subject=True,
-    intents=frozenset({GenIntent.PLAIN, GenIntent.CONSISTENCY, GenIntent.COMPOSE}),
+    intents=frozenset(
+        {GenIntent.PLAIN, GenIntent.CONSISTENCY, GenIntent.COMPOSE, GenIntent.EDIT}
+    ),
     metered="subscription-quota",
 )
 

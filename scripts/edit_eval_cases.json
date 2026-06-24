@@ -1,0 +1,9 @@
+{
+  "_comment": "Edit-quality eval cases. Edit `source` to any local image; each case is one delta applied as both a TEMPLATE arm (package GenIntent.EDIT) and a RAW arm (instruction verbatim, no preservation scaffold).",
+  "source": "generated/2026-06-24/fox.png",
+  "cases": [
+    { "id": "recolor", "delta": "make the cap and hoodie red" },
+    { "id": "add", "delta": "add a pair of small round black-rimmed eyeglasses on the fox's face" },
+    { "id": "remove", "delta": "remove the speech bubble, leaving a clean background where it was" }
+  ]
+}

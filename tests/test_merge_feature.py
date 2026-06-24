@@ -39,7 +39,7 @@ def _run(provider, tmp_path, refs=REFS2, **kw):
 
 def test_happy_path_writes_file_with_compose_intent(tmp_path):
     p = _StubProvider()
-    out = _run(p, tmp_path, labels=["A", "B"], relation="side by side")
+    out, meta = _run(p, tmp_path, labels=["A", "B"], relation="side by side")
     assert out.read_bytes() == PNG
     call = p.calls[0]
     assert call["intent"] is GenIntent.COMPOSE

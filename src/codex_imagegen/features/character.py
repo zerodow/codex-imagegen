@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from ..core import env_file, image_loader, image_writer, orchestrator
+from ..core import env_file, image_loader, image_writer, orchestrator, output_report
 from ..core.errors import ImagegenError, InputError
 from ..providers import registry
 from ..providers.generate.base import GenIntent
@@ -56,6 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=int, default=DEFAULT_TOTAL_TIMEOUT)
     parser.add_argument("--stall-timeout", type=int, default=DEFAULT_STALL_TIMEOUT, dest="stall_timeout")
     parser.add_argument("--quiet", action="store_true", help="Print only saved paths")
+    parser.add_argument("--json", action="store_true", help="Print a JSON batch report (per-image token usage + totals)")
     return parser
 
 
@@ -98,18 +99,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[baseline] ready: {baseline}", file=sys.stderr)
 
         # 2) Render each scene with the baseline as a consistency reference.
-        saved: list[Path] = []
+        saved: list[tuple[Path, dict]] = []
         failures: list[tuple[str, str]] = []
         for idx, scene in enumerate(scenes, start=1):
             out = outdir / f"{idx:02d}-{image_writer.slugify(scene)}.{args.fmt}"
             print(f"[{idx}/{len(scenes)}] {scene[:60]}", file=sys.stderr)
             try:
-                orchestrator.generate_to_file(
+                _p, meta = orchestrator.generate_to_file(
                     provider, scene, out, refs=refs, intent=GenIntent.CONSISTENCY,
                     size=args.size, fmt=args.fmt, total_timeout=args.timeout,
                     stall_timeout=args.stall_timeout, progress=progress,
                 )
-                saved.append(out)
+                saved.append((out, meta))
             except ImagegenError as exc:
                 print(f"  ! scene {idx} failed: {exc}", file=sys.stderr)
                 failures.append((scene, str(exc)))
@@ -120,8 +121,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"imagegen-character: unexpected error: {exc}", file=sys.stderr)
         return 1
 
-    for path in saved:
-        print(path)
+    # Always emit when --json so a consumer gets a parseable (possibly empty) report,
+    # even if every scene failed; the human/quiet output stays silent on an empty batch.
+    if saved or args.json:
+        print(output_report.format_batch(saved, as_json=args.json, quiet=args.quiet))
     print(f"[done] {len(saved)} saved, {len(failures)} failed -> {outdir}", file=sys.stderr)
     return 4 if failures else 0
 
