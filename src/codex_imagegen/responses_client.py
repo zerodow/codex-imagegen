@@ -67,12 +67,43 @@ def build_headers(token: str, account_id: str | None, version: str) -> dict[str,
     return headers
 
 
-def build_payload(prompt: str, size: str, output_format: str, model: str) -> dict:
-    """Build the codex/responses body that wires a single image_generation tool."""
-    user_text = (
-        "Use the image_generation tool to render the following image. "
-        f"Return only the image, no commentary. Prompt: {prompt}"
-    )
+def build_payload(
+    prompt: str,
+    size: str,
+    output_format: str,
+    model: str,
+    refs: list[tuple[str, str]] | None = None,
+) -> dict:
+    """Build the codex/responses body that wires a single image_generation tool.
+
+    When `refs` (list of (base64, mime)) is given, each is attached as an
+    `input_image` content part for character/subject consistency, the prompt is
+    framed as "same subject as the reference", and the image tool is forced
+    (`tool_choice: "required"`).
+    """
+    refs = refs or []
+    if refs:
+        user_text = (
+            "Generate a NEW image of the SAME character/subject shown in the reference "
+            "image(s). Keep their appearance consistent — face, hair, body, outfit, "
+            "colors, and art style — but place them in the scene described below. "
+            "Do not copy the reference background. Return only the image. "
+            f"Scene: {prompt}"
+        )
+        content: list[dict] = [
+            {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
+            for (b64, mime) in refs
+        ]
+        content.append({"type": "input_text", "text": user_text})
+        tool_choice = "required"
+    else:
+        user_text = (
+            "Use the image_generation tool to render the following image. "
+            f"Return only the image, no commentary. Prompt: {prompt}"
+        )
+        content = [{"type": "input_text", "text": user_text}]
+        tool_choice = "auto"
+
     image_tool: dict = {"type": "image_generation", "output_format": output_format}
     if size and size != "auto":
         image_tool["size"] = size
@@ -80,15 +111,9 @@ def build_payload(prompt: str, size: str, output_format: str, model: str) -> dic
         "model": model,
         "stream": True,
         "instructions": "You are an image generation assistant.",
-        "input": [
-            {
-                "type": "message",
-                "role": "user",
-                "content": [{"type": "input_text", "text": user_text}],
-            }
-        ],
+        "input": [{"type": "message", "role": "user", "content": content}],
         "tools": [image_tool],
-        "tool_choice": "auto",
+        "tool_choice": tool_choice,
         "parallel_tool_calls": False,
         "store": False,
         "reasoning": {"effort": "low", "summary": "auto"},
@@ -243,13 +268,15 @@ def generate_image_bytes(
     total_timeout: float = DEFAULT_TOTAL_TIMEOUT,
     stall_timeout: float = DEFAULT_STALL_TIMEOUT,
     progress: bool = False,
+    refs: list[tuple[str, str]] | None = None,
 ) -> tuple[bytes, dict]:
     """Generate one image; return (image_bytes, item_metadata).
 
-    Refreshes the access token once and retries on HTTP 401.
+    `refs` (list of (base64, mime)) attaches reference images for subject
+    consistency. Refreshes the access token once and retries on HTTP 401.
     """
     version = codex_version()
-    payload = build_payload(prompt, size, output_format, model)
+    payload = build_payload(prompt, size, output_format, model, refs=refs)
     headers = build_headers(access_token, account_id, version)
     try:
         return _post_once(headers, payload, total_timeout, stall_timeout, progress)

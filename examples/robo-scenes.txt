@@ -1,0 +1,2 @@
+# One scene per line. Blank lines and # comments are ignored.
+Robo the robot waving hello with one hand while holding a paintbrush in the other, standing in a cozy art studio

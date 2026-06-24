@@ -87,3 +87,7 @@ def test_refresh_success_persists(tmp_path, monkeypatch):
     assert persisted["tokens"]["access_token"] == "NEW"
     assert persisted["tokens"]["refresh_token"] == "NEWR"
     assert "last_refresh" in persisted
+    # In-place mutation: the SAME dict is updated, so a later extract_tokens on
+    # the reused dict (e.g. the next image in a batch) sees the fresh token.
+    assert data["tokens"]["access_token"] == "NEW"
+    assert auth.extract_tokens(data)[0] == "NEW"

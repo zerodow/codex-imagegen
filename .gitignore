@@ -22,6 +22,11 @@ build/
 # claudekit artifacts (local only)
 release-manifest.json
 
+# generated image outputs (demos / pipeline results) — keep scene text files
+/generated/
+/characters/
+/examples/**/*.png
+
 # next.js
 /.next/
 /out/

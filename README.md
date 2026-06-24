@@ -49,6 +49,7 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | Flag | Default | Notes |
 |------|---------|-------|
 | `-o, --output` | `./generated/<date>/<slug>-<time>.<ext>` | output path; parent dirs created |
+| `-i, --reference` | — | reference image for character/subject consistency (repeatable) |
 | `--size` | `1024x1024` | **hint only** — gpt-image-2 picks its own dimensions/aspect |
 | `--format` | `png` | `png` / `jpeg` / `webp` |
 | `--model` | `gpt-5.5` | parent model that hosts the image tool |
@@ -61,6 +62,39 @@ Examples:
 imagegen "coffee shop logo, minimal, gold on black" -o brand/logo.png
 imagegen "isometric city block, low-poly" --size 1536x1024 --quiet
 ```
+
+## Character consistency (same character across images)
+
+`gpt-image-2` accepts reference images. Use `-i/--reference` to keep a subject's
+appearance when placing it in a new scene (repeat `-i` for multiple angles):
+
+```bash
+# 1) baseline character
+imagegen "a friendly robot mascot, mint accents, big cyan eyes, flat vector" -o robo.png
+# 2) reuse it as reference in new scenes
+imagegen "the same robot waving, holding a paintbrush, in an art studio" -i robo.png -o robo-studio.png
+```
+
+### Batch a whole set: `imagegen-character`
+
+Generate a baseline once, then render many scenes that all reuse it as reference:
+
+```bash
+# scenes.txt — one scene prompt per line (# comments and blank lines ignored)
+imagegen-character --name Robo \
+  --baseline-prompt "a friendly robot mascot, mint accents, big cyan eyes, flat vector" \
+  --scenes scenes.txt --outdir characters/robo
+# ...or start from an existing image:
+imagegen-character --name Robo --baseline-image robo.png --scenes scenes.txt
+```
+
+Output: `<outdir>/00-baseline.<ext>` + `NN-<slug>.<ext>` per scene. Runs sequentially
+(image gen is slow + quota-limited); a failed scene is reported and the batch
+continues — exit `4` if any scene failed, `0` otherwise.
+
+> **Consistency is strong but not perfect.** Subject identity (face, colors, outfit)
+> carries well; expect minor style/pose/detail drift between images. Passing multiple
+> reference angles (`-i a.png -i b.png`) improves it.
 
 ## Exit codes
 

@@ -69,6 +69,16 @@ def test_build_payload_auto_size_omits_size():
     assert "size" not in payload["tools"][0]
 
 
+def test_build_payload_with_refs_forces_tool_and_attaches_image():
+    refs = [("BASE64DATA", "image/png")]
+    payload = rc.build_payload("a cat in space", "auto", "png", "gpt-5.5", refs=refs)
+    assert payload["tool_choice"] == "required"  # forced when references present
+    content = payload["input"][0]["content"]
+    assert content[0]["type"] == "input_image"
+    assert content[0]["image_url"] == "data:image/png;base64,BASE64DATA"
+    assert content[-1]["type"] == "input_text"
+
+
 def test_build_headers_includes_required_fields():
     headers = rc.build_headers("tok", "acc", "0.141.0")
     assert headers["Authorization"] == "Bearer tok"
