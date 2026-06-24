@@ -92,6 +92,23 @@ def _compose_user_text(prompt: str, n_refs: int, labels: list[str], relation: st
     )
 
 
+def _edit_user_text(delta: str) -> str:
+    """Frame an in-place edit: apply ONLY the delta, preserve everything else.
+
+    The preservation clause is the load-bearing part — the backend edits via
+    regeneration, so without an explicit "keep the rest" instruction it drifts
+    unmodified regions (text, line work, colors). Verified by probe.
+    """
+    return (
+        "Edit the provided image. Apply ONLY this change: "
+        f"{delta}. "
+        "Preserve everything else exactly as in the original — overall composition, "
+        "the position and pose of every subject, all other colors, any text rendered "
+        "in the image, line work, art style, and the background. Do not restyle or "
+        "regenerate unmodified regions. Return only the edited image, no commentary."
+    )
+
+
 def build_payload(
     prompt: str,
     size: str,
@@ -105,10 +122,12 @@ def build_payload(
     """Build the codex/responses body that wires a single image_generation tool.
 
     `intent` chooses the prompt framing (the caller decides; this function owns
-    the wording). CONSISTENCY/COMPOSE attach each `refs` entry (base64, mime) as
-    an `input_image` content part and force the tool (`tool_choice: "required"`);
-    PLAIN sends prompt-only with `tool_choice: "auto"`. COMPOSE also uses
-    `labels` (paired to refs, in order) and `relation` to disambiguate subjects.
+    the wording). CONSISTENCY/COMPOSE/EDIT attach each `refs` entry (base64, mime)
+    as an `input_image` content part and force the tool (`tool_choice: "required"`);
+    PLAIN sends prompt-only with `tool_choice: "auto"`. COMPOSE also uses `labels`
+    (paired to refs, in order) and `relation` to disambiguate subjects. EDIT takes
+    a single source ref and wraps `prompt` in a preservation template (apply only
+    the delta, keep everything else).
     """
     refs = refs or []
     if intent is GenIntent.COMPOSE:
@@ -128,6 +147,14 @@ def build_payload(
             f"Scene: {prompt}"
         )
         content: list[dict] = [
+            {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
+            for (b64, mime) in refs
+        ]
+        content.append({"type": "input_text", "text": user_text})
+        tool_choice = "required"
+    elif intent is GenIntent.EDIT:
+        user_text = _edit_user_text(prompt)
+        content = [
             {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
             for (b64, mime) in refs
         ]
@@ -227,6 +254,7 @@ def _post_once(
     seen: dict[str, int] = {}
     image_b64: str | None = None
     meta: dict = {}
+    usage_meta: dict = {}
     failure: str | None = None
     last_phase = "connecting"
 
@@ -259,6 +287,8 @@ def _post_once(
                 ):
                     image_b64 = item["result"]
                     meta = {k: v for k, v in item.items() if k != "result"}
+            if etype == "response.completed":
+                usage_meta = _extract_usage(evt)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
         raise GatewayError(f"HTTP {exc.code}: {body[:400]}", status=exc.code) from None
@@ -275,9 +305,10 @@ def _post_once(
         detail = failure or f"events seen: {types}"
         raise GatewayError(f"no image returned ({detail})")
     try:
-        return base64.b64decode(image_b64, validate=True), meta
+        decoded = base64.b64decode(image_b64, validate=True)
     except Exception:  # noqa: BLE001
         raise GatewayError("backend returned invalid base64 in image result") from None
+    return decoded, {**meta, **usage_meta, "elapsed_s": round(time.monotonic() - start, 1)}
 
 
 def _extract_failure(evt: dict) -> str | None:
@@ -290,6 +321,33 @@ def _extract_failure(evt: dict) -> str | None:
     return evt.get("message") or evt.get("code") or (
         evt.get("error") if isinstance(evt.get("error"), str) else None
     )
+
+
+def _extract_usage(evt: dict) -> dict:
+    """Pull token usage + model names from a `response.completed` event.
+
+    Returns {} when the fields are absent (older/other backends) — callers must
+    treat usage as optional and never fabricate it. `tool_usage.image_gen` is the
+    real per-image cost; top-level `usage` is the orchestration (gpt-5.5) cost.
+    """
+    resp = evt.get("response")
+    if not isinstance(resp, dict):
+        return {}
+    out: dict = {}
+    if isinstance(resp.get("usage"), dict):
+        out["usage"] = resp["usage"]
+    tool_usage = resp.get("tool_usage")
+    if isinstance(tool_usage, dict) and isinstance(tool_usage.get("image_gen"), dict):
+        out["image_usage"] = tool_usage["image_gen"]
+    models: dict = {}
+    if resp.get("model"):
+        models["orchestrator"] = resp["model"]
+    tools = resp.get("tools")
+    if isinstance(tools, list) and tools and isinstance(tools[0], dict) and tools[0].get("model"):
+        models["image"] = tools[0]["model"]
+    if models:
+        out["models"] = models
+    return out
 
 
 def generate_image_bytes(

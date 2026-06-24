@@ -19,6 +19,7 @@ class GenIntent(Enum):
     PLAIN = "plain"             # prompt only, no subject to preserve
     CONSISTENCY = "consistency"  # refs = the SAME single subject, render a new scene
     COMPOSE = "compose"         # refs = multiple DISTINCT subjects, merge them (Phase 2)
+    EDIT = "edit"               # refs = the SINGLE source image to modify in place
 
 
 @dataclass(frozen=True)

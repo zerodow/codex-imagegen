@@ -85,7 +85,7 @@ def test_verify_retries_with_correction_until_ok(tmp_path):
 def test_verify_gives_up_after_max_retries_keeps_best_effort(tmp_path):
     img = _ImgProvider()
     v = _Vision(verdicts=[CompositionVerdict(ok=False, reasons="nope")] * 5)
-    out = _run(img, tmp_path, vision=v, verify=True, max_retries=1)
+    out, meta = _run(img, tmp_path, vision=v, verify=True, max_retries=1)
     assert len(img.calls) == 2  # initial + 1 retry, then stop
     assert out.read_bytes() == PNG
 

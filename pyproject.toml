@@ -15,6 +15,7 @@ dependencies = []  # stdlib only
 imagegen = "codex_imagegen.cli:main"
 imagegen-character = "codex_imagegen.pipeline:main"
 imagegen-merge = "codex_imagegen.merge_cli:main"
+imagegen-edit = "codex_imagegen.edit_cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

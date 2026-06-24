@@ -39,8 +39,8 @@ def run(
     vision: VisionProvider | None = None,
     verify: bool = False,
     max_retries: int = 1,
-) -> Path:
-    """Merge the subjects in `refs` into one image at `out_path`. Returns the path.
+) -> tuple[Path, dict]:
+    """Merge the subjects in `refs` into one image at `out_path`. Returns (path, meta).
 
     Raises InputError if the provider cannot do multi-subject composition or the
     reference count is outside what it supports. When `vision` is given, references
@@ -79,7 +79,7 @@ def run(
     path = out_path
     for attempt in range(attempts):
         scene_text = scene if not correction else f"{scene}. {correction}"
-        path, _meta = orchestrator.generate_to_file(
+        path, meta = orchestrator.generate_to_file(
             provider,
             scene_text,
             out_path,
@@ -94,10 +94,10 @@ def run(
             progress=progress,
         )
         if vision is None or not verify:
-            return path
+            return path, meta
         verdict = vision.verify_composition(_encode(path), mime, expected=expected)
         if verdict.ok:
-            return path
+            return path, meta
         if attempt < attempts - 1:
             correction = (
                 f"A previous attempt was wrong ({verdict.reasons}). Ensure these appear as "
@@ -112,7 +112,7 @@ def run(
                 f"keeping best effort ({verdict.reasons})",
                 file=sys.stderr,
             )
-    return path
+    return path, meta
 
 
 def _caption_subjects(vision: VisionProvider, refs: list[tuple[str, str]], progress: bool) -> list[str]:
