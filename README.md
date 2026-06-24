@@ -1,5 +1,10 @@
 # codex-imagegen
 
+![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue)
+![License: MIT](https://img.shields.io/badge/license-MIT-green)
+![Runtime deps: none](https://img.shields.io/badge/runtime%20deps-none%20(stdlib)-lightgrey)
+![Status: experimental](https://img.shields.io/badge/status-experimental-orange)
+
 Generate an image from a text prompt using **your ChatGPT subscription** — no
 `OPENAI_API_KEY`, no per-image API billing. One command:
 
@@ -10,6 +15,14 @@ imagegen "a watercolor cat sitting on a sunny windowsill" -o cat.png
 It calls `gpt-image-2` through the Codex Responses backend, reusing the OAuth
 token Codex already stored when you ran `codex login`. Image generation consumes
 your ChatGPT plan quota (it does **not** hit the paid Images API).
+
+> ⚠️ **Disclaimer — unofficial, use at your own risk.** This is an independent,
+> community project. It is **not affiliated with, endorsed by, or supported by OpenAI,
+> ChatGPT, or MiniMax.** It talks to `chatgpt.com/backend-api/codex/responses` — the
+> **undocumented** backend the Codex CLI uses, not a public API. That endpoint can change
+> or break at any time, and automating it may fall outside OpenAI's terms of service for
+> your account. You are responsible for your own usage and quota. Intended for personal
+> and educational use, with no warranty (see [License](#license)).
 
 ## How it works
 
@@ -37,8 +50,19 @@ This tool talks to the same backend the Codex CLI uses, directly.
 ## Install
 
 ```bash
-pip install -e .          # exposes the `imagegen` command
+# from a clone
+git clone https://github.com/zerodow/codex-imagegen.git
+cd codex-imagegen
+pip install .          # exposes imagegen / imagegen-character / imagegen-merge / imagegen-edit
+
+# …or straight from GitHub
+pip install "git+https://github.com/zerodow/codex-imagegen.git"
+
+# …or isolate the CLI with pipx (recommended)
+pipx install "git+https://github.com/zerodow/codex-imagegen.git"
 ```
+
+> Hacking on it? Use an editable + test install instead: `pip install -e ".[dev]"`.
 
 ## Usage
 
@@ -206,7 +230,13 @@ merge command refuses any provider that can't composite multiple distinct subjec
 | Provider | Generation | Multi-subject (merge) | Key / meter |
 |----------|-----------|------------------------|-------------|
 | `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `~/.codex/auth.json` — ChatGPT plan quota, no per-image cost |
-| `minimax` | Image-01 | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (~$0.0035/image) |
+| `minimax` | Image-01 *(experimental)* | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (per [MiniMax pricing](https://platform.minimax.io)) |
+
+> **MiniMax image generation is experimental / unverified.** The vision (caption +
+> verify) path is verified against a live key; the **Image-01 *generation* path is not
+> yet confirmed live** — its model id and request/response shapes may differ from what
+> this tool sends. Check [platform.minimax.io](https://platform.minimax.io) before relying
+> on it. `codex` is the supported default.
 
 > **`--format` with `minimax`:** Image-01 chooses its own encoding; if it doesn't
 > match `--format`, the byte check fails cleanly (exit 4) rather than writing a
@@ -271,3 +301,13 @@ python3 scripts/validate_responses.py    # writes /tmp/validate-cat.png
 pip install -e ".[dev]"
 PYTHONPATH=src python3 -m pytest tests/ -q
 ```
+
+## License
+
+[MIT](LICENSE). Provided "as is", without warranty of any kind. Using an undocumented
+endpoint is at your own risk — see the disclaimer at the top.
+
+---
+
+Not affiliated with OpenAI or MiniMax. "ChatGPT", "Codex", "gpt-image-2", and related
+marks belong to their respective owners.
