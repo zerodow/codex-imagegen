@@ -74,8 +74,6 @@ GoogleService-Info.plist
 
 repomix-output.xml
 .serena/cache
-plans/**/*
-!plans/templates/*
 screenshots/*
 docs/screenshots/*
 logs.txt
@@ -112,5 +110,4 @@ external/
 
 # Git worktrees (local development only)
 worktrees/
-oraclemessage-deck/sessions/
 oraclemessage-deck/*.png
