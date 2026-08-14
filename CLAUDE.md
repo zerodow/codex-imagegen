@@ -1,4 +1,8 @@
-# codex-imagegen
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## codex-imagegen
 
 Generate images from text prompts using a **ChatGPT subscription** (gpt-image-2 via the
 Codex Responses backend) — no `OPENAI_API_KEY`, no per-image API billing. Now multi-provider:
@@ -13,6 +17,11 @@ step. Python 3.13, **stdlib-only** (no third-party runtime deps).
   — render many scenes of ONE consistent character (baseline reused as reference).
 - `imagegen-merge "<scene>" -i a.png -i b.png [--label …] [--relation …] [--vision off|minimax] [--verify] [--max-retries N]`
   — combine 2+ subjects into ONE image. `--vision` captions refs before + verifies after.
+- `imagegen-edit "<delta>" -i src.png [-o out.png]`
+  — modify ONE source image (recolor/add/remove), applying only the delta. Codex-only (EDIT intent).
+
+Every command prints a structured output + per-image token-cost block on success; `--quiet` prints
+only the saved path, `--json` emits the same data as machine-readable JSON (wins over `--quiet`).
 
 Exit codes: `0` ok · `2` bad input · `3` auth · `4` backend/stream · `1` unexpected.
 
@@ -22,18 +31,22 @@ Split by **role**, with a thin orchestration layer; providers declare capabiliti
 route to the strongest backend instead of flattening to a lowest common denominator.
 
 ```
-core/        errors · image_loader · image_writer · orchestrator   (provider-agnostic)
+core/        errors · image_loader · image_writer · image_dims · output_report
+             env_file · orchestrator                            (provider-agnostic)
 providers/
   registry.py                         # name -> provider
   generate/ base.py (ImageProvider, GenCapabilities, GenIntent)
             codex/{auth,client,provider}      minimax/{client,provider}
   vision/   base.py (VisionProvider)          minimax/{client,provider}
-features/   character · merge          # multi-step orchestration
-cli · pipeline · merge_cli             # thin CLI entry points (the 3 commands above)
+features/   character · merge · edit   # multi-step orchestration
+cli · pipeline · merge_cli · edit_cli  # thin CLI entry points (the 4 commands above)
 ```
 
-- **`GenIntent`** = `PLAIN | CONSISTENCY | COMPOSE`. The caller picks intent; the provider owns
-  the exact prompt wording. COMPOSE (merge) is Codex-only.
+- **`GenIntent`** = `PLAIN | CONSISTENCY | COMPOSE | EDIT`. The caller picks intent; the provider
+  owns the exact prompt wording. COMPOSE (merge) and EDIT are Codex-only — features REFUSE a
+  provider whose `capabilities.intents` lacks the requested intent rather than degrading silently.
+- **EDIT is regeneration, not pixel-lock**: the backend redraws conditioned on the source, so the
+  provider's preservation template (in its payload builder) is what keeps unmodified regions intact.
 - **`GenCapabilities`** (`max_refs`, `multi_subject`, `intents`, `metered`) lets `features/merge`
   REFUSE a provider that can't composite multiple subjects (e.g. MiniMax Image-01) rather than
   silently dropping one. Do not weaken this guard.
@@ -61,8 +74,16 @@ Key facts to remember:
 ## Conventions
 
 - **stdlib-only**: MiniMax/Codex HTTP uses `urllib`. Don't add runtime deps.
-- **Tests are fully mocked** (no network, no quota). Run: `PYTHONPATH=src python3 -m pytest tests/ -q`.
-  Mock at the client/provider boundary; never assert on generated pixels (no seed → non-deterministic).
+- **Dev install** exposes the 4 `imagegen*` commands from `[project.scripts]`: `pip install -e ".[dev]"`.
+  The commands don't exist until installed; tests run without install via `PYTHONPATH=src`.
+- **Tests are fully mocked** (no network, no quota). Run all: `PYTHONPATH=src python3 -m pytest tests/ -q`.
+  One file: append the path; one test: `… tests/test_edit_feature.py::test_name -q`. Mock at the
+  client/provider boundary; never assert on generated pixels (no seed → non-deterministic).
+- **`scripts/` holds dev/eval tooling** that reuses the package directly (not the CLI): `eval_edit_quality.py`
+  (TEMPLATE-vs-RAW edit quality on the free Codex path → HTML in `eval-out/`), `validate_responses.py`
+  (live smoke test, **consumes 1 quota image**), `probe_codex_self_judge.py` (can Codex self-judge for free?).
+- **Credentials load from a project-local `.env`** — every CLI entry point calls `env_file.load_dotenv()`
+  first (stdlib parser, no python-dotenv). A real exported var always wins; `.env` is gitignored.
 - **`plans/` is gitignored** (local working area; see `.gitignore`). Plans, reports, and HTML
   previews live there and are NOT committed. Tracked docs go in `docs/`.
 - Commits: conventional format, **no AI attribution**.
