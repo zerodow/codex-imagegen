@@ -113,3 +113,4 @@ external/
 # Git worktrees (local development only)
 worktrees/
 oraclemessage-deck/sessions/
+oraclemessage-deck/*.png
