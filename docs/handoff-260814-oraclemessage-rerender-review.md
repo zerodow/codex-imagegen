@@ -1,8 +1,8 @@
-# Handoff — OracleMessage: duyệt rerender lá 01–03, tiếp 04–07
+# Handoff — OracleMessage: đã chốt lá 01–04, tiếp 05–07
 
-Ngày: 2026-08-14 22:34 (Asia/Saigon). Mục đích: tiếp tục công việc trên device khác.
-Nguồn sự thật về concept/pipeline: `plans/260713-1530-oraclemessage-cardlist/plan.md` trên
-MacBook gốc (plans/ bị gitignore — KHÔNG có trên device khác; phần cốt lõi được tóm ở đây).
+Ngày: 2026-08-14 22:34, cập nhật 2026-08-15 (Asia/Saigon). Mục đích: tiếp tục công việc trên
+device khác. Nguồn sự thật về concept/pipeline: `plans/260713-1530-oraclemessage-cardlist/plan.md`
+(plans/ NAY ĐÃ track git → có sau `git pull`; phần cốt lõi vẫn được tóm ở đây).
 
 ## Trạng thái hiện tại
 
@@ -14,21 +14,46 @@ MacBook gốc (plans/ bị gitignore — KHÔNG có trên device khác; phần c
   30 lá ở session local `260814-1047-30cards-brd-catalog/catalog.html`. CHƯA được thay ảnh
   mới vào catalog master cho đến khi user chốt xong vòng review.
 - User đã đánh giá lá 1–7. Verdicts đến giờ:
-  - **01 The Spark**: v2 rồi v3 đều CHƯA ƯNG (v3 đã sửa đom đóm thành vệt mực mềm, vẫn chưa đạt).
-    Đang chờ user nói cụ thể chưa ưng ở đâu (đom đóm? cụm lá chuối quá đậm? bố cục?).
+  - **01 The Spark**: ✅ ĐÃ CHỐT (2026-08-14 23:45) — **bỏ hẳn đom đóm**, thay bằng
+    **cọc rào tre khô nứt ra một chồi xanh**. Bản chốt đã promote:
+    `oraclemessage-deck/final/front/cards/card-01-the-spark.png` (+ art + prompt).
+    Session cuối: `260814-2345-spark-f1-polish` (bản G2). Hành trình loại trừ:
+    đom đóm (không vẽ được vật phát sáng dưới luật no-glow) → nhang (u ám) →
+    tia nắng giữ luật ivory (tia không giành được tiêu điểm vì nửa trên đã sáng sẵn) →
+    tia nắng phá luật ivory (tia rõ nhưng lá lệch tông cả bộ) → **chồi non**.
+    Chốt vì Ace of Wands trong Rider-Waite gốc là CÀNH GẬY NẢY CHỒI chứ không phải tia sáng,
+    nên hướng này bám biểu tượng gốc và không cần chạm luật no-glow.
   - **02 The Veil**: ĐÃ GIỮ bản v2 (render từ ảnh thật Hạ Long — xem Refs dưới).
-  - **03 The Compass**: v3 CHƯA ƯNG. Cũng chờ user chỉ điểm (tay? la bàn? chất lụa?).
-  - **04–07** (Mirror/Key/Lantern/Tide): hướng sửa đã ghi nhận, duyệt TỪNG-LÁ-MỘT,
+  - **03 The Compass**: ✅ ĐÃ CHỐT (2026-08-15) — **bỏ hẳn hình tượng người cầm la bàn** (user chê
+    trông thô), thay bằng **tĩnh vật: la bàn đồng nắp mở tựa khối gỗ trên bàn, một dải nắng chéo**.
+    Bản chốt: `final/front/cards/card-03-the-compass.png`, session `260815-0005-compass-flat-refine`
+    (bản I1). Đánh đổi user đã biết và chấp nhận: bản này KHÔNG có ngã rẽ nên lá nghiêng về
+    'định hướng nội tại' hơn là 'chọn đường' (Lenormand Ways) — bản I2 có ngã ba đường qua cửa sổ
+    vẫn nằm trong session nếu sau này muốn đổi ý.
+  - **04 The Mirror**: ✅ ĐÃ CHỐT (2026-08-15) — **bỏ hẳn art tái dùng từ 16 Nội Tâm**, thay bằng
+    **thiếu nữ áo dài tím đứng nhỏ QUAY LƯNG bên mép ao, dưới nước là phản chiếu lật ngược dài hơn
+    cả người**. Bản chốt: `final/front/cards/card-04-the-mirror.png` (bản M1), session cuối
+    `260815-0055-mirror-posture-fix`.
+    Lỗi gốc của bản cũ: luật chung của bộ có câu `water is one flat quiet wash with NO MIRROR
+    REFLECTIONS`, tức là **lá Gương bị cấm vẽ đúng thứ làm nên nghĩa của nó** → mặt ao ra mảng gần
+    đen, không có bóng. Lá 04 giờ là **ngoại lệ DUY NHẤT** được phép có phản chiếu (chi tiết cách
+    viết ngoại lệ + các bài học prompt: `final/front/cards/README.md`).
+    ĐÃ LOẠI trước khi render: tĩnh vật "gương đồng cổ trên bàn" — vì 03, 05 và 20 đều đã là
+    vật-thể-trên-gỗ, thêm 04 nữa là ba lá liên tiếp trùng bố cục.
+    Prompt lá 04 là **CHUỖI 1 render + 4 edit** (`prompt-04-the-mirror.txt`), không phải prompt đơn.
+  - **05–07** (Key/Lantern/Tide): hướng sửa đã ghi nhận, duyệt TỪNG-LÁ-MỘT,
     CHỈ render sau khi user duyệt hướng của từng lá:
-    04 phản chiếu nước phải rõ nghĩa Mirror hơn · 05 khung cửa phải đọc rõ là cánh cửa ·
+    05 khung cửa phải đọc rõ là cánh cửa ·
     06 đèn lồng trước người sau (có thể góc nhìn từ trên) · 07 dùng địa danh du lịch VN thật làm nền.
-- Xem 3 lá hiện hành (02 v2 + 01/03 v3) không cần file local:
-  https://claude.ai/code/artifact/5f0cbb30-188a-484d-8d9d-9913592e4ce6
 
 ## Chú ý khi làm trên device khác
 
-- `oraclemessage-deck/sessions/` (606MB) và `plans/` bị gitignore → KHÔNG có trên device khác.
-  Ảnh cũ xem qua artifact URL trên; prompts đầy đủ nhúng bên dưới — đủ để re-roll.
+- **CẬP NHẬT 2026-08-15: `oraclemessage-deck/sessions/` và `plans/` KHÔNG còn bị gitignore nữa** —
+  đã track để làm cross-device, nên `git pull` là có đủ ảnh lẫn plan. (Repo vì thế nặng, ~1.2GB.)
+- **Python 3.13 là bắt buộc** (`requires-python >=3.13`). Nếu `python3` mặc định là 3.12 thì
+  `pip install -e ".[dev]"` sẽ fail. Đường vòng không cần cài, gọi thẳng interpreter 3.13:
+  `PYTHONPATH=src /opt/homebrew/opt/python@3.13/bin/python3.13 -c 'import sys; from codex_imagegen.cli import main; sys.argv=["imagegen"]+sys.argv[1:]; main()' "<prompt>" -o out.png --size 1024x1536`
+  (đổi `codex_imagegen.cli` → `codex_imagegen.edit_cli` cho `imagegen-edit`).
 - Pipeline mỗi lá (cần `pip install -e ".[dev]"` + `codex login`):
   1. `imagegen "<prompt>" -o art-NN-<slug>.png --size 1024x1536 --quiet` — render TUẦN TỰ,
      tuyệt đối không parallel (race OAuth refresh → chết session Codex).
@@ -39,13 +64,19 @@ MacBook gốc (plans/ bị gitignore — KHÔNG có trên device khác; phần c
 - Lá 02 render với ref: tải https://commons.wikimedia.org/wiki/File:Halong_Bay_in_dense_fog.jpg
   (Vyacheslav Argenberg, 2008, CC BY 4.0) rồi truyền `-i <file>`.
 
-## Prompts hiện hành (verbatim — đơn vị để re-roll tiếp)
+## Prompts
 
-### 01 The Spark — v3 (chưa ưng, chờ feedback cụ thể trước khi roll tiếp)
+**Nguồn duy nhất đúng cho lá ĐÃ CHỐT: `oraclemessage-deck/final/front/cards/prompt-NN-<slug>.txt`**
+(đã track git, có sẵn sau `git pull`).
 
-```
-TALL VERTICAL hanging-scroll format, portrait orientation, the image is MUCH taller than wide (2:3 width-to-height, like a tarot card). FULL-BLEED painting with NO border, NO frame, NO keyline, NO margin — the painted scene runs to all four edges of the image. Traditional Vietnamese silk painting (tranh lua), matte mineral pigment stained into raw silk, visible silk weave texture throughout, flat uneven hand-brushed washes, museum piece by a mid-century Vietnamese silk master. STRICT RULES: the upper half of the picture is mostly empty unpainted pale-ivory silk sky; no glow, no luminous effects; faces are never present. Restrained muted palette of grey-green, warm ivory and dusty indigo. Subject in the lower third. Scene: a quiet Vietnamese village garden at deep blue dusk, painted only as a close cluster of broad banana leaves and two slender bamboo stems in soft dark grey-green and dusty-indigo washes, with a very soft dusty-indigo evening wash low along the bottom edge; no person, no houses, no mountains. Above the leaves, seven to nine FIREFLIES drift upward in one gentle rising curve. Each firefly is a graceful, poetic brush motif, its body a soft-edged ink dab that melts slightly into the silk weave, never a hard crisp silhouette: a tiny elongated dusty-indigo body, a small flat matte warm-ochre mark at the tail tip, and at most one faint short pale stroke suggesting a folded wing. They must read instantly as fireflies at dusk, NOT as flies, bees, wasps, moths or dragonflies — no spread fly wings, no detailed legs, no antennae, no entomological specimen illustration. ONE principal firefly near the lower-third focal point is modestly larger than the rest, still small and elegant, its warm-ochre tail the strongest warm note of the painting, completely matte, never luminous. One small firefly rises higher than the group, like a first idea taking flight. Clear focal hierarchy: principal firefly first, rising curve of fireflies second, garden leaves third. Generous uncluttered negative space. Absolutely no halo, no bloom, no radiance, no emitted light, no illuminated surroundings. No text, no words, no signature.
-```
+Prompt v3 của lá 01 (đom đóm) và lá 03 (tay cầm la bàn) ĐÃ GỠ khỏi tài liệu này — cả hai motif đều
+đã bị LOẠI, để lại dưới cái tiêu đề "hiện hành" chỉ tổ khiến ai đó re-roll nhầm.
+
+Lá 04 có prompt dạng **CHUỖI** (1 render + 4 edit nối tiếp) — phải chạy đúng thứ tự ghi trong file,
+không phải một prompt đơn.
+
+Các bài học prompt đã chứng minh ăn / không ăn (chống 3D, chống đen đặc, bẫy bóng đổ, bẫy bão hoà màu,
+bẫy dáng ngồi xổm, ngoại lệ phản chiếu cho lá 04): xem `final/front/cards/README.md`.
 
 ### 02 The Veil — v2 (ĐÃ GIỮ — chỉ dùng lại nếu cần render biến thể; nhớ -i ref Hạ Long)
 
@@ -53,17 +84,19 @@ TALL VERTICAL hanging-scroll format, portrait orientation, the image is MUCH tal
 TALL VERTICAL hanging-scroll format, portrait orientation, the image is MUCH taller than wide (2:3 width-to-height, like a tarot card). FULL-BLEED painting with NO border, NO frame, NO keyline, NO margin — the painted scene runs to all four edges of the image. Traditional Vietnamese silk painting (tranh lua), matte mineral pigment stained into raw silk, visible silk weave texture throughout, flat uneven hand-brushed washes, museum piece by a mid-century Vietnamese silk master. STRICT RULES: the upper half of the picture is mostly empty unpainted pale-ivory silk sky; no glow, no luminous effects; water is one smooth continuous quiet pale grey-green wash fading evenly to the bottom edge, with absolutely no dark patches, no blocky stains, no hard-edged shapes in the water and no mirror reflections; faces are small, stylized, minimal brush features. Restrained muted palette of grey-green, warm ivory and dusty indigo; if a garment is present it is soft violet-lavender as the main accent. Scene: use the supplied real photograph of Ha Long Bay in dense fog as the geographic and compositional foundation. Preserve its distinctive spatial arrangement: one isolated sheer-sided limestone tower half-dissolved in fog on the left, a darker cluster of steep vertical limestone karst islands on the right, and a broad quiet channel of mist and water opening between them. The karst must read as sheer vertical limestone cliffs rising straight from the sea, with only sparse vegetation clinging to their tops — not soft rounded forested hills. Recompose the horizontal view naturally into a tall 2:3 hanging-scroll crop, karst confined mainly to the lower third and lower sides, with a vast veil of pale morning mist above; the fog reads as soft layered translucent horizontal veils that reveal only part of the scene. Add one very small traditional Vietnamese wooden rowboat with a single tiny stylized rower low in the channel, half-hidden behind a translucent band of fog, clearly secondary to the landscape. Transform the photograph completely into restrained silk painting; do not retain photographic lighting, sharpness, reflections or color. No cruise ships, no buildings, no fantasy mountains. No text, no words, no signature.
 ```
 
-### 03 The Compass — v3 = v2 (chưa ưng, chờ feedback cụ thể)
-
-```
-TALL VERTICAL hanging-scroll format, portrait orientation, the image is MUCH taller than wide (2:3 width-to-height, like a tarot card). FULL-BLEED painting with NO border, NO frame, NO keyline, NO margin — the painted scene runs to all four edges of the image. Traditional Vietnamese silk painting (tranh lua), matte mineral pigment stained into raw silk, visible silk weave texture throughout, flat uneven hand-brushed washes, museum piece by a mid-century Vietnamese silk master. EVERY element of this painting, including the hand and the compass, is rendered in the same flat stylized silk-painting manner: a few flat matte washes bounded by one delicate dark outline, minimal shading, no volume modeling, no realistic skin texture, no photographic or western realistic rendering, no colored-pencil look. STRICT RULES: the upper half of the picture is mostly empty unpainted pale-ivory silk sky; no glow, no luminous effects; water is one flat quiet wash with no reflections. Restrained muted palette of grey-green, warm ivory and dusty indigo; the sleeve is soft violet-lavender as the main accent. Scene: a close first-person view looking slightly downward over a quiet Vietnamese rice-field landscape. In the lower-center foreground, one slender stylized hand emerging from a flowing soft violet-lavender sleeve holds a large antique round bronze compass, about one quarter of the image width, the unmistakable primary focal point. The hand is elegant and simplified in the silk-painting tradition: long graceful fingers drawn with a single fine outline and one flat pale-ivory wash, like hands in classic Vietnamese silk paintings of women — never a realistic fleshy Western hand. The compass is flat matte aged bronze, drawn with delicate linework: a simple eight-pointed compass rose, a clear central pivot and ONE strong dark needle, with absolutely no letters, no numbers, no written cardinal directions. The needle points clearly toward the right-hand branch of an earthen dike path. Beyond the hand, the dike splits into TWO clearly separate raised earthen paths through quiet grey-green rice paddies — a real fork, the secondary focal point. A few distant village trees and extremely faint low hills sit on a low horizon, leaving the upper half mostly bare ivory silk. No map, no scroll, no signs, no extra objects, no other person or body part. Clear focal hierarchy: compass first, pointing needle second, forked path third. All surfaces matte, no metallic shine, no reflections, no cast shadows. No text, no words, no signature.
-```
-
 ## Việc tiếp theo (theo thứ tự)
 
-1. Hỏi user chưa ưng 01 và 03 ở điểm nào → chỉnh prompt trúng đích → re-roll vào session mới.
-2. Khi 01–03 chốt xong: duyệt hướng 04 → render sau khi duyệt → lặp cho 05, 06, 07.
-3. Sau khi vòng review khép: user quyết định mới được ghi verdict + thay ảnh vào catalog master,
-   rồi promote lá đạt vào `oraclemessage-deck/final/front/cards/`.
+1. ~~Chốt 01, 03, 04~~ ✅ xong. Lá đã chốt gom ở `oraclemessage-deck/final/front/cards/`
+   (01, 02, 03, 04 — kèm README bảng tiến độ + index.html; hiện **4/30**).
+2. Tiếp: duyệt hướng **05 Chìa Khoá** → render sau khi duyệt → lặp cho 06, 07.
+   Hướng đã ghi nhận cho 05: khung cửa phải đọc rõ là CÁNH CỬA.
+   Quy trình bắt buộc: TRÌNH HƯỚNG TRƯỚC, chỉ render sau khi user duyệt hướng của từng lá.
+3. Sau khi vòng review khép: user quyết định mới được ghi verdict + thay ảnh vào catalog master
+   (`sessions/260814-1047-30cards-brd-catalog/catalog.html` — đến giờ vẫn CHƯA đụng vào, cố ý).
 4. Quyết định mở cấp deck còn treo: 21 Crown (khăn vành dây chưa rõ), 25 Mountain (persistence),
    27 Sanctuary (đổi tên "Chốn An Yên"?), 23 Scale (cầu khỉ thay cán cân).
+5. Câu hỏi còn treo từ vòng gom thư mục chốt: có đưa 4 lá đã duyệt theo danh sách 24 lá cũ
+   (Kẻ Lữ Hành, Buông Bỏ, Hy Vọng, Tĩnh Lặng — session `260814-0922`) vào thư mục chốt dưới
+   tên BRD mới hay không.
+6. Cụm cần soi CẠNH NHAU trước khi khoá cả bộ: 03 La Bàn, 05 Chìa Khoá, 20 Bản Đồ đều là
+   tĩnh vật vật-thể-trên-gỗ — dễ trùng bố cục.
