@@ -17,14 +17,27 @@ from pathlib import Path
 
 from codex_imagegen.core.errors import AuthError, GatewayError
 
-AUTH_PATH = Path.home() / ".codex" / "auth.json"
+
+def _codex_home() -> Path:
+    """Resolve the Codex home directory the way the Codex CLI does.
+
+    `CODEX_HOME` wins when set and non-empty — Orca points it at a per-account
+    home, so `codex login` inside Orca writes credentials there, not to
+    `~/.codex`. Reading only `~/.codex` silently authenticates as a different
+    (possibly stale) account, or fails with "auth.json not found".
+    """
+    override = (os.environ.get("CODEX_HOME") or "").strip()
+    return Path(override).expanduser() if override else Path.home() / ".codex"
+
+
+AUTH_PATH = _codex_home() / "auth.json"
 OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
 OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # Codex CLI's published client id
 _REFRESH_UA = "codex_cli_rs (Mac OS; arm64) codex-imagegen"
 
 
 def load_auth() -> dict:
-    """Load and parse ~/.codex/auth.json, or raise AuthError."""
+    """Load and parse the Codex `auth.json`, or raise AuthError."""
     if not AUTH_PATH.exists():
         raise AuthError(f"{AUTH_PATH} not found. Run `codex login` first.")
     try:

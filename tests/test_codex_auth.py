@@ -3,6 +3,7 @@
 import io
 import json
 import urllib.error
+from pathlib import Path
 
 import pytest
 
@@ -24,6 +25,24 @@ def test_extract_tokens_api_key_only_rejected():
     # Authenticated with an API key (no OAuth bearer) -> this path can't be used.
     with pytest.raises(AuthError):
         auth.extract_tokens({"OPENAI_API_KEY": "sk-xxx", "tokens": {}})
+
+
+def test_codex_home_prefers_env_override(tmp_path, monkeypatch):
+    # Orca points CODEX_HOME at a per-account home; auth.json lives there.
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "orca-home"))
+    assert auth._codex_home() == tmp_path / "orca-home"
+
+
+def test_codex_home_expands_tilde(monkeypatch):
+    monkeypatch.setenv("CODEX_HOME", "~/somewhere")
+    assert auth._codex_home() == Path.home() / "somewhere"
+
+
+def test_codex_home_falls_back_when_unset_or_blank(monkeypatch):
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    assert auth._codex_home() == Path.home() / ".codex"
+    monkeypatch.setenv("CODEX_HOME", "   ")
+    assert auth._codex_home() == Path.home() / ".codex"
 
 
 def test_load_auth_missing_file(tmp_path, monkeypatch):

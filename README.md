@@ -29,7 +29,7 @@ your ChatGPT plan quota (it does **not** hit the paid Images API).
 ```
 prompt ─► imagegen ─► POST chatgpt.com/backend-api/codex/responses
                        (tool: image_generation, stream: true,
-                        Bearer token from ~/.codex/auth.json)
+                        Bearer token from $CODEX_HOME/auth.json, default ~/.codex)
                      ─► SSE stream ─► base64 PNG ─► validated, written to -o
 ```
 
@@ -229,7 +229,7 @@ merge command refuses any provider that can't composite multiple distinct subjec
 
 | Provider | Generation | Multi-subject (merge) | Key / meter |
 |----------|-----------|------------------------|-------------|
-| `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `~/.codex/auth.json` — ChatGPT plan quota, no per-image cost |
+| `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`) — ChatGPT plan quota, no per-image cost |
 | `minimax` | Image-01 *(experimental)* | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (per [MiniMax pricing](https://platform.minimax.io)) |
 
 > **MiniMax image generation is experimental / unverified.** The vision (caption +
@@ -250,7 +250,7 @@ imagegen-merge ... --provider minimax                          # rejected: minim
 
 > **Three credentials — split by billing *meter*, not auth type.** All three are just
 > Bearer keys; what differs is what each covers:
-> - **Codex** → `~/.codex/auth.json` — ChatGPT subscription quota.
+> - **Codex** → `$CODEX_HOME/auth.json`, defaulting to `~/.codex/auth.json` — ChatGPT subscription quota. Hosts that set `CODEX_HOME` (e.g. Orca's per-account homes) are followed automatically, so credentials match whatever account `codex login` wrote.
 > - **MiniMax vision (M3)** → `MINIMAX_API_KEY` — **token-metered, so your token plan covers it.**
 > - **MiniMax image gen (Image-01)** → `MINIMAX_IMAGE_API_KEY` — **per-image meter, NOT
 >   covered by the token plan**, so it needs a pay-as-you-go balance.
@@ -264,7 +264,7 @@ imagegen-merge ... --provider minimax                          # rejected: minim
 Put the MiniMax keys in a `.env` at the project root (it's gitignored) — it's loaded
 automatically when you run a command from the project root, and a real exported variable
 always wins over the file. Copy `.env.example` to start. Never paste a key into source code.
-(Codex still uses `~/.codex/auth.json`, not `.env`.)
+(Codex still uses `$CODEX_HOME/auth.json`, not `.env`.)
 
 ```bash
 cp .env.example .env   # then fill in MINIMAX_API_KEY / MINIMAX_IMAGE_API_KEY

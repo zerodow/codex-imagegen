@@ -59,7 +59,7 @@ All keys are just Bearer credentials; what differs is the meter and what covers 
 
 | Provider | Role | Multi-subject | Credential | Meter / coverage |
 |----------|------|---------------|------------|------------------|
-| `codex` (default) | image gen | yes (≤4 refs) | `~/.codex/auth.json` | ChatGPT plan quota, no per-image cost |
+| `codex` (default) | image gen | yes (≤4 refs) | `$CODEX_HOME/auth.json` (default `~/.codex`) | ChatGPT plan quota, no per-image cost |
 | `minimax` (Image-01) | image gen | no (1 face) | `MINIMAX_IMAGE_API_KEY` | per-image, **pay-as-you-go** |
 | MiniMax M3 | vision (caption/verify) | — | `MINIMAX_API_KEY` | per-**token**, **covered by the token plan** |
 
