@@ -69,6 +69,10 @@ Key facts to remember:
 - **Image gen (Image-01) is per-image → the token plan does NOT cover it** → needs a PAYG balance
   (`MINIMAX_IMAGE_API_KEY`). This per-meter difference is the only reason the two MiniMax keys are
   separate env vars; one key with both balances can be reused for both.
+- **`$CODEX_HOME` picks WHICH ChatGPT account renders** (no CLI flag does), so two homes = two
+  accounts with separate quota. A 401/429 therefore names the account + auth.json path it used
+  (`auth.describe_account`), and a 429 body is phrased as plan + reset time instead of raw JSON —
+  keep that, it is the only thing distinguishing "out of quota" from "wrong account".
 - Keys are resolved **lazily** (first use) — constructing a provider never reads env or hits the network.
 
 ## Conventions

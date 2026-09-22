@@ -291,7 +291,7 @@ def _post_once(
                 usage_meta = _extract_usage(evt)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
-        raise GatewayError(f"HTTP {exc.code}: {body[:400]}", status=exc.code) from None
+        raise GatewayError(_http_failure(exc.code, body), status=exc.code) from None
     except (TimeoutError, ConnectionError):
         elapsed = time.monotonic() - start
         raise GatewayError(
@@ -309,6 +309,50 @@ def _post_once(
     except Exception:  # noqa: BLE001
         raise GatewayError("backend returned invalid base64 in image result") from None
     return decoded, {**meta, **usage_meta, "elapsed_s": round(time.monotonic() - start, 1)}
+
+
+def _http_failure(code: int, body: str) -> str:
+    """Render an upstream HTTP failure, expanding a 429 quota body into words.
+
+    The backend answers an exhausted plan with a JSON body the raw status hides;
+    spelling out the plan and the reset time is what tells the user whether to
+    wait or to switch account.
+    """
+    return _quota_failure(body) or f"HTTP {code}: {body[:400]}"
+
+
+def _quota_failure(body: str) -> str | None:
+    """Phrase a `usage_limit_reached` body, or None when it is another failure."""
+    try:
+        err = json.loads(body).get("error")
+    except Exception:  # noqa: BLE001 - a non-JSON body is just not a quota error
+        return None
+    if not isinstance(err, dict) or err.get("type") != "usage_limit_reached":
+        return None
+    plan = err.get("plan_type")
+    msg = "usage limit reached" + (f" on the {plan} plan" if plan else "")
+    resets_at = err.get("resets_at")
+    if isinstance(resets_at, (int, float)) and not isinstance(resets_at, bool):
+        when = time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(resets_at))
+        msg += f"; resets {when}"
+    return msg
+
+
+def _with_account(exc: GatewayError, auth: dict) -> GatewayError:
+    """Name the account behind a 401/429 — $CODEX_HOME picks it, no CLI flag does.
+
+    Returns other failures untouched: they are about the request, not about who
+    sent it.
+    """
+    if exc.status not in (401, 429):
+        return exc
+    hint = (
+        " Another ChatGPT account may still have quota — point CODEX_HOME at its"
+        " home directory, or unset CODEX_HOME to use ~/.codex."
+        if exc.status == 429
+        else ""
+    )
+    return GatewayError(f"{exc} [account: {_auth.describe_account(auth)}]{hint}", status=exc.status)
 
 
 def _extract_failure(evt: dict) -> str | None:
@@ -388,5 +432,8 @@ def generate_image_bytes(
                 print("[auth] access token expired; refreshing", file=sys.stderr)
             new_token = _auth.refresh_and_persist(auth, refresh_token)
             headers = build_headers(new_token, account_id, version)
-            return _post_once(headers, payload, total_timeout, stall_timeout, progress)
-        raise
+            try:
+                return _post_once(headers, payload, total_timeout, stall_timeout, progress)
+            except GatewayError as retried:
+                raise _with_account(retried, auth) from None
+        raise _with_account(exc, auth) from None

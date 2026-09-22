@@ -6,6 +6,7 @@ backend rejects). When the access token is expired the backend returns 401; we
 refresh via the published Codex client id and persist the new tokens atomically.
 """
 
+import base64
 import json
 import os
 import tempfile
@@ -69,6 +70,37 @@ def extract_tokens(auth: dict) -> tuple[str, str | None, str | None]:
         account_id if isinstance(account_id, str) else None,
         refresh if isinstance(refresh, str) else None,
     )
+
+
+def _jwt_claims(token: str) -> dict:
+    """Decode a JWT payload WITHOUT verifying it. Diagnostics only, never access."""
+    try:
+        segment = token.split(".")[1]
+        segment += "=" * (-len(segment) % 4)
+        claims = json.loads(base64.urlsafe_b64decode(segment))
+    except Exception:  # noqa: BLE001 - an unreadable token just means a vaguer message
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def describe_account(auth: dict) -> str:
+    """Return "who am I": which ChatGPT account/plan, from which auth.json.
+
+    A 401/429 is about WHICH account the request used, and that is picked by
+    `$CODEX_HOME` rather than by any CLI flag — so the raw status alone sends
+    the user hunting in the wrong account. Falls back to the account id, then
+    to the path alone, when the token is not a readable JWT.
+    """
+    tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
+    claims = _jwt_claims(tokens.get("access_token") or "")
+    api_auth = claims.get("https://api.openai.com/auth")
+    plan = api_auth.get("chatgpt_plan_type") if isinstance(api_auth, dict) else None
+    # The email sits under the profile claim; only some tokens also mirror it
+    # top-level, so check both before falling back to the opaque account id.
+    profile = claims.get("https://api.openai.com/profile")
+    email = claims.get("email") or (profile.get("email") if isinstance(profile, dict) else None)
+    who = email or tokens.get("account_id") or "unknown account"
+    return f"{who}{f', plan {plan}' if plan else ''} (from {AUTH_PATH})"
 
 
 def refresh_and_persist(auth: dict, refresh_token: str, *, timeout: int = 30) -> str:
