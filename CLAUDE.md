@@ -100,8 +100,9 @@ Key facts to remember:
   (live smoke test, **consumes 1 quota image**), `probe_codex_self_judge.py` (can Codex self-judge for free?).
 - **Credentials load from a project-local `.env`** — every CLI entry point calls `env_file.load_dotenv()`
   first (stdlib parser, no python-dotenv). A real exported var always wins; `.env` is gitignored.
-- **`plans/` is gitignored** (local working area; see `.gitignore`). Plans, reports, and HTML
-  previews live there and are NOT committed. Tracked docs go in `docs/`.
+- **`plans/` and `oraclemessage-deck/` are gitignored** (local working areas; see `.gitignore`).
+  Plans, reports, HTML previews and their rendered images live there and are NOT committed.
+  Tracked docs go in `docs/`. This repo tracks CODE only — never re-add a rendered image to it.
 - Commits: conventional format, **no AI attribution**.
 
 ## Caveats

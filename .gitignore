@@ -22,6 +22,12 @@ build/
 # claudekit artifacts (local only)
 release-manifest.json
 
+# local working areas — plans, reports, HTML previews and their rendered images.
+# This repo tracks CODE only; tracked docs go in docs/. (Both were tracked by
+# mistake until 2026-09-26 and purged from history along with ~830MB of PNGs.)
+/plans/
+/oraclemessage-deck/
+
 # generated image outputs (demos / pipeline results) — keep scene text files
 /generated/
 /characters/
