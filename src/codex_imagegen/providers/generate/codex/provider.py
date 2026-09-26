@@ -4,6 +4,11 @@ Wraps the codex/responses client behind the `ImageProvider` contract. The
 provider instance holds the loaded auth dict and reuses it across calls, so a
 token refreshed mid-batch (in place, on HTTP 401) carries forward to later
 images instead of being re-loaded each time.
+
+Two credential paths, chosen per call by `auth.pool_config()`: the personal
+ChatGPT login in `auth.json` (default), or an account-pool proxy fronting many
+accounts behind one bearer key. Capabilities are identical either way — a pool
+speaks the same Responses wire format, so the same intents work.
 """
 
 from . import auth, client
@@ -46,9 +51,20 @@ class CodexImageProvider:
         labels: list[str] | None = None,
         relation: str | None = None,
     ) -> tuple[bytes, dict]:
-        if self._auth is None:
-            self._auth = auth.load_auth()
-        access, account_id, refresh = auth.extract_tokens(self._auth)
+        pool = auth.pool_config()
+        if pool is not None:
+            # Pool mode: one opaque bearer key, no auth.json to read and no
+            # refresh_token (the proxy refreshes each pooled account itself), so
+            # nothing is cached on the instance and `chatgpt-account-id` is left
+            # off — the proxy picks which account renders.
+            endpoint, access = pool
+            account_id, refresh, auth_store = None, None, {}
+        else:
+            endpoint = None
+            if self._auth is None:
+                self._auth = auth.load_auth()
+            auth_store = self._auth
+            access, account_id, refresh = auth.extract_tokens(auth_store)
         return client.generate_image_bytes(
             prompt,
             size=size,
@@ -56,7 +72,8 @@ class CodexImageProvider:
             access_token=access,
             account_id=account_id,
             refresh_token=refresh,
-            auth=self._auth,
+            auth=auth_store,
+            endpoint=endpoint,
             model=self._model,
             total_timeout=total_timeout,
             stall_timeout=stall_timeout,

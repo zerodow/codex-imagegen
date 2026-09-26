@@ -3,6 +3,9 @@
 Builds the headers + payload the Codex CLI uses, POSTs to the codex/responses
 endpoint, parses the SSE stream, and returns the decoded image bytes from the
 `image_generation_call` result. Refreshes the access token once on HTTP 401.
+
+`endpoint` retargets the POST at an account-pool proxy that speaks the same
+Responses wire format (see `auth.pool_config`); the default is OpenAI directly.
 """
 
 import base64
@@ -20,7 +23,7 @@ from . import auth as _auth
 from codex_imagegen.core.errors import GatewayError
 from codex_imagegen.providers.generate.base import GenIntent
 
-CODEX_BACKEND = "https://chatgpt.com/backend-api/codex/responses"
+CODEX_BACKEND = "https://chatgpt.com/backend-api/codex/responses"  # default; see `endpoint`
 DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_TOTAL_TIMEOUT = 300
 DEFAULT_STALL_TIMEOUT = 120
@@ -199,10 +202,15 @@ def _loosen_read_timeout(resp, seconds: float) -> None:
         pass
 
 
-def _stream(headers: dict, body: dict, deadline: float, stall: float) -> Iterator[dict]:
-    """Yield parsed JSON event dicts from the SSE response."""
+def _stream(
+    headers: dict, body: dict, deadline: float, stall: float, *, url: str | None = None
+) -> Iterator[dict]:
+    """Yield parsed JSON event dicts from the SSE response.
+
+    `url` defaults to the OpenAI backend; a pool proxy passes its own endpoint.
+    """
     req = urllib.request.Request(
-        CODEX_BACKEND, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
+        url or CODEX_BACKEND, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
     )
     initial = max(1.0, min(30.0, deadline - time.monotonic()))
     resp = urllib.request.urlopen(req, timeout=initial)
@@ -247,7 +255,13 @@ def _stream(headers: dict, body: dict, deadline: float, stall: float) -> Iterato
 
 
 def _post_once(
-    headers: dict, payload: dict, total: float, stall: float, progress: bool
+    headers: dict,
+    payload: dict,
+    total: float,
+    stall: float,
+    progress: bool,
+    *,
+    url: str | None = None,
 ) -> tuple[bytes, dict]:
     start = time.monotonic()
     deadline = start + total
@@ -263,7 +277,7 @@ def _post_once(
             print(f"[{time.monotonic() - start:6.1f}s] {msg}", file=sys.stderr)
 
     try:
-        for evt in _stream(headers, payload, deadline, stall):
+        for evt in _stream(headers, payload, deadline, stall, url=url):
             etype = evt.get("type", "?")
             seen[etype] = seen.get(etype, 0) + 1
             first = seen[etype] == 1
@@ -338,21 +352,38 @@ def _quota_failure(body: str) -> str | None:
     return msg
 
 
-def _with_account(exc: GatewayError, auth: dict) -> GatewayError:
-    """Name the account behind a 401/429 — $CODEX_HOME picks it, no CLI flag does.
+def _with_account(exc: GatewayError, auth: dict, endpoint: str | None = None) -> GatewayError:
+    """Name WHO the failing request authenticated as — a 401/429 is about that.
+
+    Direct mode: $CODEX_HOME picks the account and no CLI flag does, so the raw
+    status alone sends the user hunting in the wrong account. Pool mode: the
+    proxy owns rotation, so there is no local account to name and no auth.json
+    to blame — a 429 means the whole pool is exhausted, and `describe_account`
+    would only mis-report `~/.codex` (an opaque pool key is not a JWT either).
 
     Returns other failures untouched: they are about the request, not about who
     sent it.
     """
     if exc.status not in (401, 429):
         return exc
-    hint = (
-        " Another ChatGPT account may still have quota — point CODEX_HOME at its"
-        " home directory, or unset CODEX_HOME to use ~/.codex."
-        if exc.status == 429
-        else ""
-    )
-    return GatewayError(f"{exc} [account: {_auth.describe_account(auth)}]{hint}", status=exc.status)
+    if endpoint is not None:
+        who = f"account pool at {endpoint}"
+        hint = (
+            " Every account in the pool is out of quota — check the pool's dashboard,"
+            f" or unset {_auth.POOL_URL_ENV}/{_auth.POOL_KEY_ENV} to fall back to your"
+            " own ChatGPT login."
+            if exc.status == 429
+            else f" The pool rejected the credential — check {_auth.POOL_KEY_ENV}."
+        )
+    else:
+        who = _auth.describe_account(auth)
+        hint = (
+            " Another ChatGPT account may still have quota — point CODEX_HOME at its"
+            " home directory, or unset CODEX_HOME to use ~/.codex."
+            if exc.status == 429
+            else ""
+        )
+    return GatewayError(f"{exc} [account: {who}]{hint}", status=exc.status)
 
 
 def _extract_failure(evt: dict) -> str | None:
@@ -411,12 +442,17 @@ def generate_image_bytes(
     intent: GenIntent = GenIntent.PLAIN,
     labels: list[str] | None = None,
     relation: str | None = None,
+    endpoint: str | None = None,
 ) -> tuple[bytes, dict]:
     """Generate one image; return (image_bytes, item_metadata).
 
     `refs` (list of (base64, mime)) attaches reference images; `intent` frames
     the prompt (`labels`/`relation` apply to COMPOSE). Refreshes the access token
     once and retries on HTTP 401.
+
+    `endpoint` (an account-pool proxy's responses URL) replaces the default
+    backend. A pool credential carries no `refresh_token`, so the 401 refresh
+    below is skipped and the pool's own rejection surfaces instead.
     """
     version = codex_version()
     payload = build_payload(
@@ -425,7 +461,7 @@ def generate_image_bytes(
     )
     headers = build_headers(access_token, account_id, version)
     try:
-        return _post_once(headers, payload, total_timeout, stall_timeout, progress)
+        return _post_once(headers, payload, total_timeout, stall_timeout, progress, url=endpoint)
     except GatewayError as exc:
         if exc.status == 401 and refresh_token:
             if progress:
@@ -433,7 +469,9 @@ def generate_image_bytes(
             new_token = _auth.refresh_and_persist(auth, refresh_token)
             headers = build_headers(new_token, account_id, version)
             try:
-                return _post_once(headers, payload, total_timeout, stall_timeout, progress)
+                return _post_once(
+                    headers, payload, total_timeout, stall_timeout, progress, url=endpoint
+                )
             except GatewayError as retried:
-                raise _with_account(retried, auth) from None
-        raise _with_account(exc, auth) from None
+                raise _with_account(retried, auth, endpoint) from None
+        raise _with_account(exc, auth, endpoint) from None

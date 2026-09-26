@@ -221,7 +221,7 @@ def test_post_once_usage_absent_is_safe(monkeypatch):
 def test_generate_refreshes_on_401_and_retries_with_new_token(monkeypatch):
     seen_headers: list[dict] = []
 
-    def fake_post(headers, payload, total, stall, progress):
+    def fake_post(headers, payload, total, stall, progress, **kwargs):
         seen_headers.append(headers)
         if len(seen_headers) == 1:
             raise GatewayError("HTTP 401: expired", status=401)
@@ -252,3 +252,111 @@ def test_generate_raises_401_when_no_refresh_token(monkeypatch):
             "p", size="auto", output_format="png",
             access_token="old", account_id=None, refresh_token=None, auth={}, progress=False,
         )
+
+
+# --- account-pool endpoint ----------------------------------------------------
+
+
+def test_stream_posts_to_default_backend(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        rc.urllib.request, "urlopen",
+        lambda req, timeout=0: (seen.append(req.full_url), _FakeResp([]))[1],
+    )
+    list(rc._stream({}, {}, time.monotonic() + 5, 5))
+    assert seen == [rc.CODEX_BACKEND]
+
+
+def test_stream_posts_to_endpoint_override(monkeypatch):
+    seen = []
+    monkeypatch.setattr(
+        rc.urllib.request, "urlopen",
+        lambda req, timeout=0: (seen.append(req.full_url), _FakeResp([]))[1],
+    )
+    list(rc._stream({}, {}, time.monotonic() + 5, 5, url="https://pool.example.com/v1/responses"))
+    assert seen == ["https://pool.example.com/v1/responses"]
+
+
+def test_generate_forwards_endpoint_to_post_once(monkeypatch):
+    seen = {}
+
+    def fake_post(headers, payload, total, stall, progress, *, url=None):
+        seen["url"] = url
+        seen["auth_header"] = headers["Authorization"]
+        seen["has_account_header"] = "chatgpt-account-id" in headers
+        return _REAL_PNG, {}
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    rc.generate_image_bytes(
+        "p", size="auto", output_format="png", access_token="sk-cpa-x",
+        account_id=None, refresh_token=None, auth={},
+        endpoint="https://pool.example.com/v1/responses",
+    )
+    assert seen["url"] == "https://pool.example.com/v1/responses"
+    assert seen["auth_header"] == "Bearer sk-cpa-x"
+    # The proxy picks which pooled account renders; we must not pin one.
+    assert seen["has_account_header"] is False
+
+
+def test_pool_429_names_the_pool_not_codex_home(monkeypatch):
+    def fake_post(*a, **k):
+        raise GatewayError("usage limit reached", status=429)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="sk-cpa-x",
+            account_id=None, refresh_token=None, auth={},
+            endpoint="https://pool.example.com/v1/responses",
+        )
+    msg = str(exc.value)
+    assert "pool.example.com" in msg and "pool" in msg
+    # CODEX_HOME is meaningless in pool mode — pointing there sends the user astray.
+    assert "CODEX_HOME" not in msg
+
+
+def test_pool_401_blames_the_pool_key(monkeypatch):
+    def fake_post(*a, **k):
+        raise GatewayError("HTTP 401", status=401)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="sk-cpa-x",
+            account_id=None, refresh_token=None, auth={},
+            endpoint="https://pool.example.com/v1/responses",
+        )
+    assert rc._auth.POOL_KEY_ENV in str(exc.value)
+
+
+def test_direct_429_still_names_codex_home(monkeypatch):
+    # The pool branch must not have weakened the direct-mode diagnosis.
+    def fake_post(*a, **k):
+        raise GatewayError("usage limit reached", status=429)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="tok",
+            account_id="acc", refresh_token=None, auth={"tokens": {"account_id": "acc"}},
+        )
+    assert "CODEX_HOME" in str(exc.value)
+
+
+def test_non_auth_failure_is_untouched_in_pool_mode(monkeypatch):
+    def fake_post(*a, **k):
+        raise GatewayError("no image returned (events seen: response.created)")
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="sk-cpa-x",
+            account_id=None, refresh_token=None, auth={},
+            endpoint="https://pool.example.com/v1/responses",
+        )
+    assert str(exc.value) == "no image returned (events seen: response.created)"

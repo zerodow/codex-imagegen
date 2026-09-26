@@ -110,3 +110,61 @@ def test_refresh_success_persists(tmp_path, monkeypatch):
     # the reused dict (e.g. the next image in a batch) sees the fresh token.
     assert data["tokens"]["access_token"] == "NEW"
     assert auth.extract_tokens(data)[0] == "NEW"
+
+
+# --- account-pool credentials -------------------------------------------------
+
+
+def test_pool_config_absent_by_default(monkeypatch):
+    # No pool env -> None, so the personal auth.json path stays the default.
+    assert auth.pool_config() is None
+
+
+def test_pool_config_returns_normalized_url_and_key(monkeypatch):
+    monkeypatch.setenv(auth.POOL_URL_ENV, "https://pool.example.com")
+    monkeypatch.setenv(auth.POOL_KEY_ENV, "sk-cpa-secret")
+    assert auth.pool_config() == ("https://pool.example.com/v1/responses", "sk-cpa-secret")
+
+
+@pytest.mark.parametrize(
+    "given",
+    [
+        "https://pool.example.com",
+        "https://pool.example.com/",
+        "https://pool.example.com/v1",
+        "https://pool.example.com/v1/",
+        "https://pool.example.com/v1/responses",
+        "https://pool.example.com/v1/responses/",
+    ],
+)
+def test_responses_url_accepts_every_spelling(given):
+    # People paste the host root, the /v1 base, or the full endpoint.
+    assert auth._responses_url(given) == "https://pool.example.com/v1/responses"
+
+
+def test_responses_url_rejects_non_http_scheme():
+    # urllib would otherwise happily open a file:// "endpoint".
+    with pytest.raises(AuthError):
+        auth._responses_url("file:///etc/passwd")
+
+
+def test_pool_config_rejects_url_without_key(monkeypatch):
+    # Half-configured must fail loudly: falling back to auth.json here would
+    # bill the personal account while the user believes they are on the pool.
+    monkeypatch.setenv(auth.POOL_URL_ENV, "https://pool.example.com")
+    with pytest.raises(AuthError) as exc:
+        auth.pool_config()
+    assert auth.POOL_KEY_ENV in str(exc.value)
+
+
+def test_pool_config_rejects_key_without_url(monkeypatch):
+    monkeypatch.setenv(auth.POOL_KEY_ENV, "sk-cpa-secret")
+    with pytest.raises(AuthError) as exc:
+        auth.pool_config()
+    assert auth.POOL_URL_ENV in str(exc.value)
+
+
+def test_pool_config_treats_blank_as_unset(monkeypatch):
+    monkeypatch.setenv(auth.POOL_URL_ENV, "   ")
+    monkeypatch.setenv(auth.POOL_KEY_ENV, "  ")
+    assert auth.pool_config() is None

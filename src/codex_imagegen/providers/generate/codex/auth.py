@@ -4,6 +4,10 @@ The Codex subscription path authenticates with the OAuth *access_token* under
 `tokens` (NOT the `OPENAI_API_KEY` field — that is an API key the codex/responses
 backend rejects). When the access token is expired the backend returns 401; we
 refresh via the published Codex client id and persist the new tokens atomically.
+
+An account-POOL proxy is the second credential path (see `pool_config`): one
+opaque bearer key in front of many ChatGPT accounts, with no auth.json and no
+refresh token, because the proxy owns rotation and per-account refresh.
 """
 
 import base64
@@ -35,6 +39,52 @@ AUTH_PATH = _codex_home() / "auth.json"
 OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
 OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"  # Codex CLI's published client id
 _REFRESH_UA = "codex_cli_rs (Mac OS; arm64) codex-imagegen"
+
+POOL_URL_ENV = "CODEX_IMAGEGEN_BASE_URL"
+POOL_KEY_ENV = "CODEX_IMAGEGEN_API_KEY"
+
+
+def pool_config() -> tuple[str, str] | None:
+    """Return (responses_url, api_key) when an account-pool proxy is configured.
+
+    A pool (CLIProxyAPI and friends) fronts many ChatGPT accounts behind ONE
+    opaque bearer key: there is no auth.json, no refresh_token and no
+    account_id, because the proxy owns rotation and per-account token refresh.
+    Returns None when unconfigured, which keeps the personal OAuth path the
+    default. Read lazily (never at import) so the CLIs' `.env` load still counts.
+
+    Both vars are required together: honouring a half-configured pair would
+    silently fall back to the personal `auth.json` and bill the wrong account's
+    quota -- exactly the confusion `describe_account` exists to prevent.
+    """
+    url = (os.environ.get(POOL_URL_ENV) or "").strip()
+    key = (os.environ.get(POOL_KEY_ENV) or "").strip()
+    if not url and not key:
+        return None
+    if not url or not key:
+        present, missing = (POOL_KEY_ENV, POOL_URL_ENV) if key else (POOL_URL_ENV, POOL_KEY_ENV)
+        raise AuthError(
+            f"{present} is set but {missing} is not. Set both to render through an "
+            f"account pool, or unset both to use your own ChatGPT login."
+        )
+    return _responses_url(url), key
+
+
+def _responses_url(base: str) -> str:
+    """Normalize a pool base URL to its `responses` endpoint.
+
+    Accepts the three spellings people paste: the host root, `.../v1`, or the
+    full `.../v1/responses`. The scheme is checked because urllib would
+    otherwise happily open a `file://` "endpoint".
+    """
+    url = base.rstrip("/")
+    if not url.startswith(("http://", "https://")):
+        raise AuthError(f"{POOL_URL_ENV} must start with http:// or https:// (got {base!r}).")
+    if url.endswith("/responses"):
+        return url
+    if url.endswith("/v1"):
+        return f"{url}/responses"
+    return f"{url}/v1/responses"
 
 
 def load_auth() -> dict:

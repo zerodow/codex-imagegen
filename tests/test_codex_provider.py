@@ -1,5 +1,8 @@
 """CodexImageProvider: capabilities + lazy/reused auth + delegation to the client."""
 
+import pytest
+
+from codex_imagegen.core.errors import AuthError
 from codex_imagegen.providers.generate.base import GenIntent
 from codex_imagegen.providers.generate.codex import provider as prov_mod
 from codex_imagegen.providers.generate.codex.provider import CodexImageProvider
@@ -70,3 +73,72 @@ def test_midbatch_refresh_persists_to_next_call(monkeypatch):
     p.generate("one", **kw)
     p.generate("two", **kw)
     assert seen_tokens == ["orig", "refreshed"]  # call two saw call one's refresh
+
+
+# --- account-pool mode --------------------------------------------------------
+
+
+def _pool_env(monkeypatch, url="https://pool.example.com"):
+    monkeypatch.setenv(prov_mod.auth.POOL_URL_ENV, url)
+    monkeypatch.setenv(prov_mod.auth.POOL_KEY_ENV, "sk-cpa-secret")
+
+
+def test_pool_mode_uses_the_key_and_never_reads_auth_json(monkeypatch):
+    seen = {}
+
+    def boom():  # auth.json must not be touched: a pool user may not have one
+        raise AssertionError("load_auth must not be called in pool mode")
+
+    def fake_generate_image_bytes(prompt, **kwargs):
+        seen.update(kwargs)
+        return b"IMG", {}
+
+    _pool_env(monkeypatch)
+    monkeypatch.setattr(prov_mod.auth, "load_auth", boom)
+    monkeypatch.setattr(prov_mod.client, "generate_image_bytes", fake_generate_image_bytes)
+
+    data, _ = CodexImageProvider().generate(
+        "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
+        total_timeout=10, stall_timeout=5, progress=False,
+    )
+    assert data == b"IMG"
+    assert seen["access_token"] == "sk-cpa-secret"
+    assert seen["endpoint"] == "https://pool.example.com/v1/responses"
+    # No account to pin and no token of ours to refresh — the proxy owns both.
+    assert seen["account_id"] is None
+    assert seen["refresh_token"] is None
+    assert seen["auth"] == {}
+
+
+def test_direct_mode_passes_no_endpoint(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(prov_mod.auth, "load_auth", lambda: {"tokens": {"access_token": "tok"}})
+    monkeypatch.setattr(
+        prov_mod.client, "generate_image_bytes",
+        lambda prompt, **kwargs: (seen.update(kwargs), (b"IMG", {}))[1],
+    )
+    CodexImageProvider().generate(
+        "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
+        total_timeout=10, stall_timeout=5, progress=False,
+    )
+    assert seen["endpoint"] is None
+    assert seen["access_token"] == "tok"
+
+
+def test_half_configured_pool_refuses_instead_of_falling_back(monkeypatch):
+    # URL without key: silently using auth.json would bill the wrong account.
+    monkeypatch.setenv(prov_mod.auth.POOL_URL_ENV, "https://pool.example.com")
+    monkeypatch.setattr(prov_mod.auth, "load_auth", lambda: {"tokens": {"access_token": "tok"}})
+    with pytest.raises(AuthError):
+        CodexImageProvider().generate(
+            "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
+            total_timeout=10, stall_timeout=5, progress=False,
+        )
+
+
+def test_pool_mode_keeps_full_capabilities(monkeypatch):
+    # A pool speaks the same Responses wire format, so merge/edit stay allowed.
+    _pool_env(monkeypatch)
+    caps = CodexImageProvider().capabilities
+    assert {GenIntent.COMPOSE, GenIntent.EDIT} <= caps.intents
+    assert caps.multi_subject is True

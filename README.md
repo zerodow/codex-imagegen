@@ -230,6 +230,7 @@ merge command refuses any provider that can't composite multiple distinct subjec
 | Provider | Generation | Multi-subject (merge) | Key / meter |
 |----------|-----------|------------------------|-------------|
 | `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`) — ChatGPT plan quota, no per-image cost |
+| `codex` via **account pool** | same | ✅ up to 4 refs | `CODEX_IMAGEGEN_BASE_URL` + `CODEX_IMAGEGEN_API_KEY` — the pool's accounts' quota ([see below](#rendering-through-an-account-pool)) |
 | `minimax` | Image-01 *(experimental)* | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (per [MiniMax pricing](https://platform.minimax.io)) |
 
 > **MiniMax image generation is experimental / unverified.** The vision (caption +
@@ -259,6 +260,35 @@ imagegen-merge ... --provider minimax                          # rejected: minim
 > MiniMax keys are separate env vars. If one key/account has both token-plan and PAYG
 > balance, you can reuse the same key for both.
 
+### Rendering through an account pool
+
+Instead of your own `codex login`, you can point the `codex` provider at a proxy that
+fronts **many ChatGPT accounts behind one bearer key** — [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI),
+[codex-proxy](https://github.com/icebear0828/codex-proxy), [codex-lb](https://github.com/Soju06/codex-lb)
+and friends. Set both variables (in `.env` or exported):
+
+```bash
+CODEX_IMAGEGEN_BASE_URL=https://your-pool.example.com   # host root, /v1, or /v1/responses
+CODEX_IMAGEGEN_API_KEY=sk-...                            # the pool's key, not an OpenAI key
+```
+
+Everything else is unchanged: same commands, same intents (merge and edit included),
+same token-cost report. When set, `auth.json` and `$CODEX_HOME` are **not read at all**.
+
+Requirements and caveats:
+
+- The pool must expose a **Responses** endpoint that streams the backend's SSE through
+  untouched. A proxy that only speaks `/v1/chat/completions` cannot work — the
+  `image_generation` tool does not exist in that wire format.
+- Pooled accounts need **ChatGPT Plus or higher**. Upstream silently strips the image
+  tool for free accounts, which surfaces here as `no image returned`, not as a quota error.
+- The proxy chooses which account renders, so a `401` means the pool rejected your key and
+  a `429` means the *whole pool* is out of quota — neither is about `$CODEX_HOME`.
+- **Set both variables or neither.** A half-configured pair is refused (exit 3) instead of
+  quietly falling back to your personal account.
+- Pooling several accounts through one host is a **larger ToS risk** than personal use, and
+  the blast radius of a ban is the whole pool. Same disclaimer as the rest of this tool.
+
 ### Where to put the keys: a project `.env`
 
 Put the MiniMax keys in a `.env` at the project root (it's gitignored) — it's loaded
@@ -276,7 +306,7 @@ cp .env.example .env   # then fill in MINIMAX_API_KEY / MINIMAX_IMAGE_API_KEY
 |------|---------|
 | 0 | success — path printed to stdout |
 | 2 | bad input (empty prompt, unknown `--size`, non-positive timeout) |
-| 3 | auth problem (not logged in / API-key-only / refresh expired → run `codex login`) |
+| 3 | auth problem (not logged in / API-key-only / refresh expired → run `codex login`; or a half-configured account pool) |
 | 4 | backend/stream failure (quota, moderation, network, timeout) |
 
 ## Limits & caveats

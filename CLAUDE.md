@@ -60,6 +60,7 @@ All keys are just Bearer credentials; what differs is the meter and what covers 
 | Provider | Role | Multi-subject | Credential | Meter / coverage |
 |----------|------|---------------|------------|------------------|
 | `codex` (default) | image gen | yes (≤4 refs) | `$CODEX_HOME/auth.json` (default `~/.codex`) | ChatGPT plan quota, no per-image cost |
+| `codex` via **pool** | image gen | yes (≤4 refs) | `CODEX_IMAGEGEN_BASE_URL` + `CODEX_IMAGEGEN_API_KEY` | the pooled accounts' ChatGPT quota |
 | `minimax` (Image-01) | image gen | no (1 face) | `MINIMAX_IMAGE_API_KEY` | per-image, **pay-as-you-go** |
 | MiniMax M3 | vision (caption/verify) | — | `MINIMAX_API_KEY` | per-**token**, **covered by the token plan** |
 
@@ -73,6 +74,17 @@ Key facts to remember:
   accounts with separate quota. A 401/429 therefore names the account + auth.json path it used
   (`auth.describe_account`), and a 429 body is phrased as plan + reset time instead of raw JSON —
   keep that, it is the only thing distinguishing "out of quota" from "wrong account".
+- **Account POOL = the second Codex credential path** (`auth.pool_config`, verified live
+  2026-09-26 against a CLIProxyAPI host). Both env vars or neither — a half-configured pair
+  RAISES instead of falling back to `auth.json`, which would bill the personal account while
+  the user believes they are on the pool. In pool mode `auth.json`/`$CODEX_HOME` are never
+  read, `chatgpt-account-id` is not sent (the proxy picks the account), and there is no
+  `refresh_token`, so the 401-refresh retry is skipped by construction. `_with_account`
+  therefore branches on `endpoint`: pointing a pool user at `CODEX_HOME` is pure misdirection,
+  and an opaque pool key is not a JWT for `describe_account` to read. The pool must stream the
+  backend's SSE through untouched — a `/v1/chat/completions`-only proxy cannot carry the
+  `image_generation` tool at all, and free-tier pooled accounts get it silently stripped
+  (surfaces as `no image returned`, not as a quota error).
 - Keys are resolved **lazily** (first use) — constructing a provider never reads env or hits the network.
 
 ## Conventions
