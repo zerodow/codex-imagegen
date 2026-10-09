@@ -28,6 +28,18 @@ DEFAULT_MODEL = "gpt-5.5"
 DEFAULT_TOTAL_TIMEOUT = 300
 DEFAULT_STALL_TIMEOUT = 120
 _VERSION_FLOOR = "0.141.0"
+# The backend's 400 when it dropped every tool but `tool_choice` still demands one.
+_TOOLS_REJECTED_MARKER = "must be specified with 'tools'"
+
+
+class ImageToolUnavailable(GatewayError):
+    """The backend silently dropped the `image_generation` tool from the request.
+
+    Happens when the authenticated ChatGPT plan has no image generation (e.g.
+    a free plan): a forced tool then 400s as "tool_choice ... must be specified
+    with 'tools'" although the body sends one, and an optional tool yields a
+    text-only answer. The request shape is fine — the account is not.
+    """
 
 
 def codex_version() -> str:
@@ -305,7 +317,12 @@ def _post_once(
                 usage_meta = _extract_usage(evt)
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="ignore")
-        raise GatewayError(_http_failure(exc.code, body), status=exc.code) from None
+        error_cls = (
+            ImageToolUnavailable
+            if exc.code == 400 and _TOOLS_REJECTED_MARKER in body
+            else GatewayError
+        )
+        raise error_cls(_http_failure(exc.code, body), status=exc.code) from None
     except (TimeoutError, ConnectionError):
         elapsed = time.monotonic() - start
         raise GatewayError(
@@ -314,6 +331,11 @@ def _post_once(
     except urllib.error.URLError as exc:
         raise GatewayError(f"network error contacting the image backend: {exc.reason}") from None
 
+    if not image_b64 and not failure and _answered_without_tool(seen):
+        raise ImageToolUnavailable(
+            "no image returned: the backend answered in text and never called the "
+            "image_generation tool"
+        )
     if not image_b64:
         types = ", ".join(sorted(seen)) or "(none)"
         detail = failure or f"events seen: {types}"
@@ -323,6 +345,13 @@ def _post_once(
     except Exception:  # noqa: BLE001
         raise GatewayError("backend returned invalid base64 in image result") from None
     return decoded, {**meta, **usage_meta, "elapsed_s": round(time.monotonic() - start, 1)}
+
+
+def _answered_without_tool(seen: dict[str, int]) -> bool:
+    """True when the stream carried a text answer but no image_generation_call."""
+    return any(t.startswith("response.output_text") for t in seen) and not any(
+        "image_generation_call" in t for t in seen
+    )
 
 
 def _http_failure(code: int, body: str) -> str:
@@ -361,9 +390,14 @@ def _with_account(exc: GatewayError, auth: dict, endpoint: str | None = None) ->
     to blame — a 429 means the whole pool is exhausted, and `describe_account`
     would only mis-report `~/.codex` (an opaque pool key is not a JWT either).
 
+    A stripped image tool (`ImageToolUnavailable`) is also about who: the plan
+    of that account has no image generation, so the remedy is another account.
+
     Returns other failures untouched: they are about the request, not about who
     sent it.
     """
+    if isinstance(exc, ImageToolUnavailable):
+        return _tool_unavailable(exc, auth, endpoint)
     if exc.status not in (401, 429):
         return exc
     if endpoint is not None:
@@ -384,6 +418,28 @@ def _with_account(exc: GatewayError, auth: dict, endpoint: str | None = None) ->
             else ""
         )
     return GatewayError(f"{exc} [account: {who}]{hint}", status=exc.status)
+
+
+def _tool_unavailable(
+    exc: ImageToolUnavailable, auth: dict, endpoint: str | None
+) -> ImageToolUnavailable:
+    """Explain a stripped image tool as an account-plan problem, with remedies."""
+    if endpoint is not None:
+        who = f"account pool at {endpoint}"
+        hint = (
+            " The pooled account that served this request has no image generation"
+            " (free-plan accounts get the image_generation tool stripped) — remove such"
+            " accounts from the pool, or retry so the pool picks another one."
+        )
+    else:
+        who = _auth.describe_account(auth)
+        hint = (
+            " The backend dropped the image_generation tool because this ChatGPT plan"
+            " has no image generation (e.g. a free plan). Run `codex login` with a paid"
+            " account, point CODEX_HOME at a paid account's home, or set"
+            f" {_auth.POOL_URL_ENV}/{_auth.POOL_KEY_ENV} to render through an account pool."
+        )
+    return ImageToolUnavailable(f"{exc} [account: {who}]{hint}", status=exc.status)
 
 
 def _extract_failure(evt: dict) -> str | None:

@@ -85,6 +85,12 @@ Key facts to remember:
   backend's SSE through untouched — a `/v1/chat/completions`-only proxy cannot carry the
   `image_generation` tool at all, and free-tier pooled accounts get it silently stripped
   (surfaces as `no image returned`, not as a quota error).
+- **A free ChatGPT plan has NO image generation on ANY path** (verified 2026-10-09): the backend
+  strips the `image_generation` tool, so a forced `tool_choice` 400s with "must be specified with
+  'tools'" (despite the body sending it) and `auto` yields text only; the CLI's own
+  `/images/generations` endpoint 403s too. The client raises `ImageToolUnavailable` naming the
+  account + plan — fix the ACCOUNT (paid login / `CODEX_HOME` / pool), not the request shape.
+  Note a host app (e.g. Orca) may export its own `CODEX_HOME`, silently swapping the account.
 - Keys are resolved **lazily** (first use) — constructing a provider never reads env or hits the network.
 
 ## Conventions

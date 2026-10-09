@@ -360,3 +360,88 @@ def test_non_auth_failure_is_untouched_in_pool_mode(monkeypatch):
             endpoint="https://pool.example.com/v1/responses",
         )
     assert str(exc.value) == "no image returned (events seen: response.created)"
+
+
+# --- image_generation tool stripped by the backend (plan without image gen) ---
+
+_TOOLS_REJECTED_BODY = (
+    '{"error":{"message":"Tool choice \'required\' must be specified with \'tools\' '
+    'parameter.","type":"invalid_request_error","param":"tool_choice","code":null}}'
+)
+
+
+def _free_plan_auth() -> dict:
+    claims = {"https://api.openai.com/auth": {"chatgpt_plan_type": "free"}}
+    segment = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip("=")
+    return {"tokens": {"access_token": f"h.{segment}.s", "account_id": "acc"}}
+
+
+def _raise_http(code: int, body: str):
+    import io
+    import urllib.error
+
+    def fake_stream(*a, **k):
+        raise urllib.error.HTTPError("u", code, "bad", {}, io.BytesIO(body.encode()))
+        yield  # pragma: no cover - makes this a generator like the real _stream
+
+    return fake_stream
+
+
+def test_post_once_flags_required_tool_choice_rejected_as_tool_unavailable(monkeypatch):
+    monkeypatch.setattr(rc, "_stream", _raise_http(400, _TOOLS_REJECTED_BODY))
+    with pytest.raises(rc.ImageToolUnavailable) as exc:
+        rc._post_once({}, {}, 10, 5, False)
+    assert exc.value.status == 400
+
+
+def test_post_once_flags_text_only_answer_as_tool_unavailable(monkeypatch):
+    events = [
+        {"type": "response.created"},
+        {"type": "response.output_text.delta", "delta": "Here is an apple"},
+        {"type": "response.completed", "response": {}},
+    ]
+    monkeypatch.setattr(rc, "_stream", lambda *a, **k: iter(events))
+    with pytest.raises(rc.ImageToolUnavailable) as exc:
+        rc._post_once({}, {}, 10, 5, False)
+    assert "never called the image_generation tool" in str(exc.value)
+
+
+def test_post_once_other_400_is_plain_gateway_error(monkeypatch):
+    monkeypatch.setattr(rc, "_stream", _raise_http(400, '{"error":{"message":"bad size"}}'))
+    with pytest.raises(GatewayError) as exc:
+        rc._post_once({}, {}, 10, 5, False)
+    assert not isinstance(exc.value, rc.ImageToolUnavailable)
+
+
+def test_direct_tool_unavailable_names_plan_and_remedies(monkeypatch):
+    def fake_post(*a, **k):
+        raise rc.ImageToolUnavailable(f"HTTP 400: {_TOOLS_REJECTED_BODY}", status=400)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    auth = _free_plan_auth()
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token=auth["tokens"]["access_token"],
+            account_id="acc", refresh_token=None, auth=auth,
+        )
+    msg = str(exc.value)
+    assert "plan free" in msg
+    assert "codex login" in msg and "CODEX_HOME" in msg and rc._auth.POOL_URL_ENV in msg
+    assert exc.value.exit_code == 4
+
+
+def test_pool_tool_unavailable_blames_a_pooled_account(monkeypatch):
+    def fake_post(*a, **k):
+        raise rc.ImageToolUnavailable("no image returned: text only")
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError) as exc:
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="sk-cpa-x",
+            account_id=None, refresh_token=None, auth={},
+            endpoint="https://pool.example.com/v1/responses",
+        )
+    msg = str(exc.value)
+    assert "pool.example.com" in msg and "CODEX_HOME" not in msg
