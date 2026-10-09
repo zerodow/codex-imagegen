@@ -30,6 +30,10 @@ DEFAULT_STALL_TIMEOUT = 120
 _VERSION_FLOOR = "0.141.0"
 # The backend's 400 when it dropped every tool but `tool_choice` still demands one.
 _TOOLS_REJECTED_MARKER = "must be specified with 'tools'"
+# A pool rotates accounts per request, so a free pooled account that stripped the
+# tool is worth re-asking: the next request likely lands on a paid one. Free to
+# retry — a stripped tool renders nothing, so no image quota is spent.
+POOL_TOOL_ATTEMPTS = 4
 
 
 class ImageToolUnavailable(GatewayError):
@@ -354,6 +358,28 @@ def _answered_without_tool(seen: dict[str, int]) -> bool:
     )
 
 
+def _post_rotating(
+    headers: dict, payload: dict, total: float, stall: float, progress: bool, url: str | None
+) -> tuple[bytes, dict]:
+    """`_post_once`, re-asked in pool mode while a pooled account strips the tool.
+
+    Direct mode has one account, so a retry would only hit the same plan again.
+    """
+    attempts = POOL_TOOL_ATTEMPTS if url is not None else 1
+    for attempt in range(1, attempts + 1):
+        try:
+            return _post_once(headers, payload, total, stall, progress, url=url)
+        except ImageToolUnavailable:
+            if attempt == attempts:
+                raise
+            if progress:
+                print(
+                    f"[pool] account without image generation; retrying ({attempt}/{attempts - 1})",
+                    file=sys.stderr,
+                )
+    raise AssertionError("unreachable")  # pragma: no cover
+
+
 def _http_failure(code: int, body: str) -> str:
     """Render an upstream HTTP failure, expanding a 429 quota body into words.
 
@@ -428,8 +454,8 @@ def _tool_unavailable(
         who = f"account pool at {endpoint}"
         hint = (
             " The pooled account that served this request has no image generation"
-            " (free-plan accounts get the image_generation tool stripped) — remove such"
-            " accounts from the pool, or retry so the pool picks another one."
+            " (free-plan accounts get the image_generation tool stripped), even after"
+            f" {POOL_TOOL_ATTEMPTS} attempts — remove such accounts from the pool."
         )
     else:
         who = _auth.describe_account(auth)
@@ -517,7 +543,7 @@ def generate_image_bytes(
     )
     headers = build_headers(access_token, account_id, version)
     try:
-        return _post_once(headers, payload, total_timeout, stall_timeout, progress, url=endpoint)
+        return _post_rotating(headers, payload, total_timeout, stall_timeout, progress, endpoint)
     except GatewayError as exc:
         if exc.status == 401 and refresh_token:
             if progress:

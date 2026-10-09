@@ -90,6 +90,8 @@ Key facts to remember:
   'tools'" (despite the body sending it) and `auto` yields text only; the CLI's own
   `/images/generations` endpoint 403s too. The client raises `ImageToolUnavailable` naming the
   account + plan — fix the ACCOUNT (paid login / `CODEX_HOME` / pool), not the request shape.
+  The pool rotates accounts per request, so in pool mode this failure is retried up to
+  `POOL_TOOL_ATTEMPTS` (free: nothing renders) — a free account in the pool = intermittent 400s.
   Note a host app (e.g. Orca) may export its own `CODEX_HOME`, silently swapping the account.
 - Keys are resolved **lazily** (first use) — constructing a provider never reads env or hits the network.
 

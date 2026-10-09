@@ -445,3 +445,75 @@ def test_pool_tool_unavailable_blames_a_pooled_account(monkeypatch):
         )
     msg = str(exc.value)
     assert "pool.example.com" in msg and "CODEX_HOME" not in msg
+
+
+def _pool_generate():
+    return rc.generate_image_bytes(
+        "p", size="auto", output_format="png", access_token="sk-cpa-x",
+        account_id=None, refresh_token=None, auth={},
+        endpoint="https://pool.example.com/v1/responses",
+    )
+
+
+def test_pool_retries_when_a_free_pooled_account_strips_the_tool(monkeypatch):
+    # The pool rotates accounts per request; a free one strips the tool, a paid
+    # one renders. A stripped-tool failure renders nothing, so retrying is free.
+    calls = []
+
+    def fake_post(*a, **k):
+        calls.append(1)
+        if len(calls) < 3:
+            raise rc.ImageToolUnavailable("HTTP 400: tools", status=400)
+        return _REAL_PNG, {}
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    data, _ = _pool_generate()
+    assert data == _REAL_PNG and len(calls) == 3
+
+
+def test_pool_gives_up_after_bounded_attempts(monkeypatch):
+    calls = []
+
+    def fake_post(*a, **k):
+        calls.append(1)
+        raise rc.ImageToolUnavailable("HTTP 400: tools", status=400)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(rc.ImageToolUnavailable) as exc:
+        _pool_generate()
+    assert len(calls) == rc.POOL_TOOL_ATTEMPTS
+    assert "pool.example.com" in str(exc.value)
+
+
+def test_pool_does_not_retry_other_failures(monkeypatch):
+    calls = []
+
+    def fake_post(*a, **k):
+        calls.append(1)
+        raise GatewayError("usage limit reached", status=429)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(GatewayError):
+        _pool_generate()
+    assert len(calls) == 1
+
+
+def test_direct_does_not_retry_stripped_tool(monkeypatch):
+    # One account in direct mode: retrying would hit the same free plan again.
+    calls = []
+
+    def fake_post(*a, **k):
+        calls.append(1)
+        raise rc.ImageToolUnavailable("HTTP 400: tools", status=400)
+
+    monkeypatch.setattr(rc, "_post_once", fake_post)
+    monkeypatch.setattr(rc, "codex_version", lambda: "v")
+    with pytest.raises(rc.ImageToolUnavailable):
+        rc.generate_image_bytes(
+            "p", size="auto", output_format="png", access_token="tok",
+            account_id="acc", refresh_token=None, auth={"tokens": {"account_id": "acc"}},
+        )
+    assert len(calls) == 1
