@@ -35,13 +35,13 @@ def test_generate_loads_auth_once_and_delegates(monkeypatch):
     monkeypatch.setattr(prov_mod.auth, "load_auth", fake_load_auth)
     monkeypatch.setattr(prov_mod.client, "generate_image_bytes", fake_generate_image_bytes)
 
-    p = CodexImageProvider(model="gpt-5.5")
+    p = CodexImageProvider(model="gpt-6.1-sol")
     data, meta = p.generate(
         "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
         total_timeout=10, stall_timeout=5, progress=False,
     )
     assert data == b"IMG" and meta == {"meta": 1}
-    assert gen_calls[0] == ("hi", GenIntent.PLAIN, "gpt-5.5")
+    assert gen_calls[0] == ("hi", GenIntent.PLAIN, "gpt-6.1-sol")
 
     # Second call must reuse the cached auth dict (load_auth not called again),
     # which is what lets a mid-batch token refresh persist.

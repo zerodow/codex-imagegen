@@ -25,7 +25,7 @@ from codex_imagegen.core.errors import GatewayError
 from codex_imagegen.providers.generate.base import GenIntent
 
 CODEX_BACKEND = "https://chatgpt.com/backend-api/codex/responses"  # default; see `endpoint`
-DEFAULT_MODEL = os.environ.get("CODEX_IMAGEGEN_MODEL", "gpt-5.6-sol")
+DEFAULT_MODEL = os.environ.get("CODEX_IMAGEGEN_MODEL", "gpt-6.1-sol")
 DEFAULT_TOTAL_TIMEOUT = 300
 DEFAULT_STALL_TIMEOUT = 120
 _VERSION_FLOOR = "0.141.0"
@@ -486,7 +486,7 @@ def _extract_usage(evt: dict) -> dict:
 
     Returns {} when the fields are absent (older/other backends) — callers must
     treat usage as optional and never fabricate it. `tool_usage.image_gen` is the
-    real per-image cost; top-level `usage` is the orchestration (gpt-5.5) cost.
+    real per-image cost; top-level `usage` is the orchestration (gpt-6.1-sol) cost.
     """
     resp = evt.get("response")
     if not isinstance(resp, dict):

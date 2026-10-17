@@ -2,7 +2,7 @@
 
 Surfaces the per-image token cost the Codex backend reports on
 `response.completed`: `image_usage` (the image-generation tokens — the real
-per-image cost) prominently, plus a one-line orchestration (gpt-5.5) summary.
+per-image cost) prominently, plus a one-line orchestration (gpt-6.1-sol) summary.
 Missing usage degrades to `n/a` / `null` — numbers are never fabricated.
 """
 

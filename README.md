@@ -77,7 +77,7 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | `--size` | `1024x1024` | **hint only** — gpt-image-2 picks its own dimensions/aspect |
 | `--format` | `png` | `png` / `jpeg` / `webp` |
 | `--provider` | `codex` | image backend: `codex` \| `minimax` (see Providers below) |
-| `--model` | provider default | model override (codex → `gpt-5.5`, minimax → `image-01`) |
+| `--model` | provider default | model override (codex → `gpt-6.1-sol`, minimax → `image-01`) |
 | `--timeout` | `300` | total seconds; large images take 1–3 min |
 | `--stall-timeout` | `120` | abort if the stream goes silent this long |
 | `--quiet` | off | print only the saved path (no progress on stderr) |
@@ -97,7 +97,7 @@ backend reports — `image` is the image-generation cost, `llm` the orchestratio
 
 ```
 ✓ saved   generated/2026-06-24/red-square-150142.png
-  model   gpt-image-2-codex (via gpt-5.5)
+  model   gpt-image-2-codex (via gpt-6.1-sol)
   result  generate · quality auto · 1024×1024
   image   in 15 (img 0 / txt 15) · out 229 (img 229) · total 244 tok
   llm     2327 tok (in 2299 / out 28)

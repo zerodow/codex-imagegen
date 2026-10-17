@@ -55,9 +55,9 @@ def test_stream_done_sentinel_terminates(monkeypatch):
 
 
 def test_build_payload_shape():
-    payload = rc.build_payload("a cat", "1024x1024", "png", "gpt-5.5")
+    payload = rc.build_payload("a cat", "1024x1024", "png", "gpt-6.1-sol")
     assert payload["stream"] is True
-    assert payload["model"] == "gpt-5.5"
+    assert payload["model"] == "gpt-6.1-sol"
     assert payload["tool_choice"] == "auto"
     tool = payload["tools"][0]
     assert tool["type"] == "image_generation"
@@ -73,7 +73,7 @@ def test_build_payload_auto_size_omits_size():
 def test_build_payload_consistency_forces_tool_and_attaches_image():
     refs = [("BASE64DATA", "image/png")]
     payload = rc.build_payload(
-        "a cat in space", "auto", "png", "gpt-5.5", refs=refs, intent=GenIntent.CONSISTENCY
+        "a cat in space", "auto", "png", "gpt-6.1-sol", refs=refs, intent=GenIntent.CONSISTENCY
     )
     assert payload["tool_choice"] == "required"  # forced for consistency framing
     content = payload["input"][0]["content"]
@@ -87,7 +87,7 @@ def test_build_payload_consistency_forces_tool_and_attaches_image():
 def test_build_payload_compose_attaches_all_refs_in_order_with_labels():
     refs = [("AAA", "image/png"), ("BBB", "image/jpeg")]
     payload = rc.build_payload(
-        "in a cafe", "auto", "png", "gpt-5.5",
+        "in a cafe", "auto", "png", "gpt-6.1-sol",
         refs=refs, intent=GenIntent.COMPOSE,
         labels=["the woman in red", "the robot mascot"], relation="shaking hands",
     )
@@ -129,7 +129,7 @@ def test_build_payload_compose_blank_label_falls_back_to_generic():
 def test_build_payload_edit_attaches_source_and_templates_preservation():
     refs = [("SRCDATA", "image/png")]
     payload = rc.build_payload(
-        "make the cap red", "auto", "png", "gpt-5.5", refs=refs, intent=GenIntent.EDIT
+        "make the cap red", "auto", "png", "gpt-6.1-sol", refs=refs, intent=GenIntent.EDIT
     )
     assert payload["tool_choice"] == "required"  # forced for edit framing
     content = payload["input"][0]["content"]
@@ -195,7 +195,7 @@ def test_post_once_captures_usage_and_models_from_completed(monkeypatch):
         {"type": "response.output_item.done",
          "item": {"type": "image_generation_call", "result": b64}},
         {"type": "response.completed", "response": {
-            "model": "gpt-5.5",
+            "model": "gpt-6.1-sol",
             "usage": {"input_tokens": 2299, "output_tokens": 28, "total_tokens": 2327},
             "tool_usage": {"image_gen": {"input_tokens": 15, "output_tokens": 229, "total_tokens": 244}},
             "tools": [{"type": "image_generation", "model": "gpt-image-2-codex"}],
@@ -206,7 +206,7 @@ def test_post_once_captures_usage_and_models_from_completed(monkeypatch):
     assert data == _REAL_PNG
     assert meta["usage"]["total_tokens"] == 2327
     assert meta["image_usage"]["total_tokens"] == 244
-    assert meta["models"] == {"orchestrator": "gpt-5.5", "image": "gpt-image-2-codex"}
+    assert meta["models"] == {"orchestrator": "gpt-6.1-sol", "image": "gpt-image-2-codex"}
     assert "elapsed_s" in meta
 
 

@@ -13,7 +13,7 @@ def _png(w: int, h: int) -> bytes:
 META_FULL = {
     "action": "edit",
     "quality": "high",
-    "models": {"orchestrator": "gpt-5.5", "image": "gpt-image-2-codex"},
+    "models": {"orchestrator": "gpt-6.1-sol", "image": "gpt-image-2-codex"},
     "image_usage": {
         "input_tokens": 15,
         "input_tokens_details": {"image_tokens": 0, "text_tokens": 15},
@@ -34,7 +34,7 @@ def _img(tmp_path, name="o.png"):
 
 def test_human_report_has_models_dims_tokens_time(tmp_path):
     out = output_report.result_line(_img(tmp_path), META_FULL)
-    assert "gpt-image-2-codex (via gpt-5.5)" in out
+    assert "gpt-image-2-codex (via gpt-6.1-sol)" in out
     assert "320×200" in out
     assert "total 244 tok" in out  # image-gen cost
     assert "2327 tok" in out       # orchestration

@@ -26,7 +26,7 @@ def test_returns_minimax_image_provider_with_default_model():
 
 
 def test_codex_default_model_when_none():
-    assert registry.get_image_provider("codex")._model == "gpt-5.5"
+    assert registry.get_image_provider("codex")._model == "gpt-6.1-sol"
 
 
 def test_unknown_provider_raises_input_error():
