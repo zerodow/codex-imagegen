@@ -11,6 +11,7 @@ Responses wire format (see `auth.pool_config`); the default is OpenAI directly.
 import base64
 import json
 import re
+import os
 import subprocess
 import sys
 import time
@@ -24,7 +25,7 @@ from codex_imagegen.core.errors import GatewayError
 from codex_imagegen.providers.generate.base import GenIntent
 
 CODEX_BACKEND = "https://chatgpt.com/backend-api/codex/responses"  # default; see `endpoint`
-DEFAULT_MODEL = "gpt-5.5"
+DEFAULT_MODEL = os.environ.get("CODEX_IMAGEGEN_MODEL", "gpt-5.6-sol")
 DEFAULT_TOTAL_TIMEOUT = 300
 DEFAULT_STALL_TIMEOUT = 120
 _VERSION_FLOOR = "0.141.0"
