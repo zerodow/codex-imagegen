@@ -77,7 +77,7 @@ imagegen "<prompt>" [-o OUTPUT] [--size SIZE] [--format png|jpeg|webp] [--quiet]
 | `--size` | `1024x1024` | **hint only** — gpt-image-2 picks its own dimensions/aspect |
 | `--format` | `png` | `png` / `jpeg` / `webp` |
 | `--provider` | `codex` | image backend: `codex` \| `minimax` (see Providers below) |
-| `--model` | provider default | model override (codex → `gpt-6.1-sol`, minimax → `image-01`) |
+| `--model` | provider default | model override (codex → `gpt-6.1-sol`, or `$CODEX_IMAGEGEN_MODEL`; minimax → `image-01`). Ignored in [pool mode](#rendering-through-an-account-pool), which always renders with `gpt-image-2.5` |
 | `--timeout` | `300` | total seconds; large images take 1–3 min |
 | `--stall-timeout` | `120` | abort if the stream goes silent this long |
 | `--quiet` | off | print only the saved path (no progress on stderr) |
@@ -230,7 +230,7 @@ merge command refuses any provider that can't composite multiple distinct subjec
 | Provider | Generation | Multi-subject (merge) | Key / meter |
 |----------|-----------|------------------------|-------------|
 | `codex` (default) | gpt-image-2 via ChatGPT | ✅ up to 4 refs | `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`) — ChatGPT plan quota, no per-image cost |
-| `codex` via **account pool** | same | ✅ up to 4 refs | `CODEX_IMAGEGEN_BASE_URL` + `CODEX_IMAGEGEN_API_KEY` — the pool's accounts' quota ([see below](#rendering-through-an-account-pool)) |
+| `codex` via **account pool** | gpt-image-2.5 via the pool's Images API | ✅ up to 4 refs | `CODEX_IMAGEGEN_BASE_URL` + `CODEX_IMAGEGEN_API_KEY` — the pool's accounts' quota ([see below](#rendering-through-an-account-pool)) |
 | `minimax` | Image-01 *(experimental)* | ❌ single face only | `MINIMAX_IMAGE_API_KEY` — pay-as-you-go (per [MiniMax pricing](https://platform.minimax.io)) |
 
 > **MiniMax image generation is experimental / unverified.** The vision (caption +
@@ -272,14 +272,21 @@ CODEX_IMAGEGEN_BASE_URL=https://your-pool.example.com   # host root, /v1, or /v1
 CODEX_IMAGEGEN_API_KEY=sk-...                            # the pool's key, not an OpenAI key
 ```
 
-Everything else is unchanged: same commands, same intents (merge and edit included),
-same token-cost report. When set, `auth.json` and `$CODEX_HOME` are **not read at all**.
+Same commands and intents (merge, edit, character and `-i` included). When set,
+`auth.json` and `$CODEX_HOME` are **not read at all**.
+
+Pool mode talks to the pool's OpenAI-style **Images API**, not the Responses endpoint:
+prompt-only renders go to `/v1/images/generations`, anything with reference images to
+`/v1/images/edits` (JSON body, references as data-URI `images`), always with `gpt-image-2.5`.
+The Responses route is avoided because the backend now forces its image tool onto
+`gpt-image-2-codex` and rejects every render with `Complexity '…' is not supported for this
+image model`. Consequences: no orchestrator LLM runs, so the report shows `llm n/a`; and
+`--size` is usually ignored (the pool picks the dimensions, typically 1536×1024).
 
 Requirements and caveats:
 
-- The pool must expose a **Responses** endpoint that streams the backend's SSE through
-  untouched. A proxy that only speaks `/v1/chat/completions` cannot work — the
-  `image_generation` tool does not exist in that wire format.
+- The pool must expose `/v1/images/generations` and `/v1/images/edits`, and list
+  `gpt-image-2.5` among its models (`GET /v1/models`).
 - Pooled accounts need **ChatGPT Plus or higher**. Upstream silently strips the image
   tool for free accounts, which surfaces here as `no image returned`, not as a quota error.
 - The proxy chooses which account renders, so a `401` means the pool rejected your key and
