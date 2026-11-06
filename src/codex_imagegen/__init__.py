@@ -5,4 +5,4 @@ Generates images by POSTing to the Codex Responses backend with the
 `~/.codex/auth.json`. No API key, no per-image API billing (uses plan quota).
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

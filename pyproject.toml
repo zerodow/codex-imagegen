@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codex-imagegen"
-version = "0.1.0"
+version = "0.2.0"
 description = "Generate images from a prompt using your ChatGPT subscription (gpt-image-2 via Codex). No API key, no per-image billing."
 requires-python = ">=3.13"
 readme = "README.md"
