@@ -89,25 +89,30 @@ def test_pool_mode_uses_the_key_and_never_reads_auth_json(monkeypatch):
     def boom():  # auth.json must not be touched: a pool user may not have one
         raise AssertionError("load_auth must not be called in pool mode")
 
-    def fake_generate_image_bytes(prompt, **kwargs):
-        seen.update(kwargs)
+    def responses_must_not_run(prompt, **kwargs):
+        raise AssertionError("pool mode must not use the Responses path")
+
+    def fake_images(prompt, **kwargs):
+        seen.update(kwargs, prompt=prompt)
         return b"IMG", {}
 
     _pool_env(monkeypatch)
     monkeypatch.setattr(prov_mod.auth, "load_auth", boom)
-    monkeypatch.setattr(prov_mod.client, "generate_image_bytes", fake_generate_image_bytes)
+    monkeypatch.setattr(prov_mod.client, "generate_image_bytes", responses_must_not_run)
+    monkeypatch.setattr(prov_mod.images_api, "generate_image_bytes", fake_images)
 
+    refs = [("QUFB", "image/png"), ("QkJC", "image/png")]
     data, _ = CodexImageProvider().generate(
-        "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
+        "on a beach", refs=refs, intent=GenIntent.COMPOSE, size="auto", fmt="png",
         total_timeout=10, stall_timeout=5, progress=False,
+        labels=["cat", "dog"], relation="side by side",
     )
     assert data == b"IMG"
-    assert seen["access_token"] == "sk-cpa-secret"
+    assert seen["api_key"] == "sk-cpa-secret"
     assert seen["endpoint"] == "https://pool.example.com/v1/responses"
-    # No account to pin and no token of ours to refresh — the proxy owns both.
-    assert seen["account_id"] is None
-    assert seen["refresh_token"] is None
-    assert seen["auth"] == {}
+    # Refs + intent framing are forwarded intact (images_api picks /images/edits).
+    assert seen["refs"] == refs and seen["intent"] is GenIntent.COMPOSE
+    assert seen["labels"] == ["cat", "dog"] and seen["relation"] == "side by side"
 
 
 def test_direct_mode_passes_no_endpoint(monkeypatch):
@@ -137,8 +142,23 @@ def test_half_configured_pool_refuses_instead_of_falling_back(monkeypatch):
 
 
 def test_pool_mode_keeps_full_capabilities(monkeypatch):
-    # A pool speaks the same Responses wire format, so merge/edit stay allowed.
+    # The pool's Images API takes refs (/images/edits), so merge/edit stay allowed.
     _pool_env(monkeypatch)
     caps = CodexImageProvider().capabilities
     assert {GenIntent.COMPOSE, GenIntent.EDIT} <= caps.intents
     assert caps.multi_subject is True
+
+
+def test_direct_mode_plain_never_uses_images_api(monkeypatch):
+    # Without a pool there is no Images API endpoint to call.
+    monkeypatch.setattr(prov_mod.auth, "load_auth", lambda: {"tokens": {"access_token": "tok"}})
+    monkeypatch.setattr(prov_mod.client, "generate_image_bytes", lambda prompt, **kw: (b"IMG", {}))
+    monkeypatch.setattr(
+        prov_mod.images_api, "generate_image_bytes",
+        lambda *a, **kw: (_ for _ in ()).throw(AssertionError("images API in direct mode")),
+    )
+    data, _ = CodexImageProvider().generate(
+        "hi", refs=None, intent=GenIntent.PLAIN, size="auto", fmt="png",
+        total_timeout=10, stall_timeout=5, progress=False,
+    )
+    assert data == b"IMG"

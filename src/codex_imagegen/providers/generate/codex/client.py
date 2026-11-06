@@ -129,6 +129,33 @@ def _edit_user_text(delta: str) -> str:
     )
 
 
+def ref_intent_text(
+    prompt: str,
+    intent: GenIntent,
+    n_refs: int,
+    labels: list[str] | None = None,
+    relation: str | None = None,
+) -> str:
+    """Instruction text for a reference-carrying intent (CONSISTENCY/COMPOSE/EDIT).
+
+    Shared by the Responses payload here and the pool's Images API path
+    (`images_api`), so both wire formats send the same wording per intent.
+    """
+    if intent is GenIntent.COMPOSE:
+        return _compose_user_text(prompt, n_refs, labels or [], relation)
+    if intent is GenIntent.EDIT:
+        return _edit_user_text(prompt)
+    if intent is GenIntent.CONSISTENCY:
+        return (
+            "Generate a NEW image of the SAME character/subject shown in the reference "
+            "image(s). Keep their appearance consistent — face, hair, body, outfit, "
+            "colors, and art style — but place them in the scene described below. "
+            "Do not copy the reference background. Return only the image. "
+            f"Scene: {prompt}"
+        )
+    raise ValueError(f"{intent} carries no reference images")
+
+
 def build_payload(
     prompt: str,
     size: str,
@@ -150,31 +177,9 @@ def build_payload(
     the delta, keep everything else).
     """
     refs = refs or []
-    if intent is GenIntent.COMPOSE:
-        user_text = _compose_user_text(prompt, len(refs), labels or [], relation)
+    if intent is not GenIntent.PLAIN:
+        user_text = ref_intent_text(prompt, intent, len(refs), labels, relation)
         content: list[dict] = [
-            {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
-            for (b64, mime) in refs
-        ]
-        content.append({"type": "input_text", "text": user_text})
-        tool_choice = "required"
-    elif intent is GenIntent.CONSISTENCY:
-        user_text = (
-            "Generate a NEW image of the SAME character/subject shown in the reference "
-            "image(s). Keep their appearance consistent — face, hair, body, outfit, "
-            "colors, and art style — but place them in the scene described below. "
-            "Do not copy the reference background. Return only the image. "
-            f"Scene: {prompt}"
-        )
-        content: list[dict] = [
-            {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
-            for (b64, mime) in refs
-        ]
-        content.append({"type": "input_text", "text": user_text})
-        tool_choice = "required"
-    elif intent is GenIntent.EDIT:
-        user_text = _edit_user_text(prompt)
-        content = [
             {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
             for (b64, mime) in refs
         ]

@@ -90,9 +90,16 @@ Key facts to remember:
   'tools'" (despite the body sending it) and `auto` yields text only; the CLI's own
   `/images/generations` endpoint 403s too. The client raises `ImageToolUnavailable` naming the
   account + plan — fix the ACCOUNT (paid login / `CODEX_HOME` / pool), not the request shape.
-  The pool rotates accounts per request, so in pool mode this failure is retried up to
-  `POOL_TOOL_ATTEMPTS` (free: nothing renders) — a free account in the pool = intermittent 400s.
+  On the Responses path a pool rotates accounts per request, so `client` retries this up to
+  `POOL_TOOL_ATTEMPTS` when given a pool `endpoint` — but the provider no longer sends pool
+  traffic there (see the Images API bullet below), so that retry is unreachable from the CLI today.
   Note a host app (e.g. Orca) may export its own `CODEX_HOME`, silently swapping the account.
+- **Pool mode uses the Images API, not Responses** (`codex/images_api.py`, model `gpt-image-2.5`):
+  PLAIN → `/images/generations`; refs (`-i`, character, merge, edit) → `/images/edits` with JSON
+  `images: [{image_url: data-URI}]`, worded by the shared `client.ref_intent_text`. Reason: since
+  2026-11-06 the Responses path forces the tool to `gpt-image-2-codex` and fails every render with
+  `Complexity '<x>' is not supported for this image model` (no client-side param fixes it). All 4
+  commands verified live through the pool. Direct (`auth.json`) mode still uses Responses.
 - Keys are resolved **lazily** (first use) — constructing a provider never reads env or hits the network.
 
 ## Conventions

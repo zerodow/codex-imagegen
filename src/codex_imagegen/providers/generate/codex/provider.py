@@ -7,11 +7,13 @@ images instead of being re-loaded each time.
 
 Two credential paths, chosen per call by `auth.pool_config()`: the personal
 ChatGPT login in `auth.json` (default), or an account-pool proxy fronting many
-accounts behind one bearer key. Capabilities are identical either way — a pool
-speaks the same Responses wire format, so the same intents work.
+accounts behind one bearer key. Capabilities are identical either way. Pool
+mode does NOT use the Responses wire format: every intent goes through the
+pool's Images API (`images_api`: PLAIN -> `/images/generations`, refs ->
+`/images/edits`), because the Responses image tool fails backend-side there.
 """
 
-from . import auth, client
+from . import auth, client, images_api
 from codex_imagegen.providers.generate.base import GenCapabilities, GenIntent
 
 # gpt-image-2 composites multiple distinct subjects natively; the count cap is a
@@ -55,16 +57,26 @@ class CodexImageProvider:
         if pool is not None:
             # Pool mode: one opaque bearer key, no auth.json to read and no
             # refresh_token (the proxy refreshes each pooled account itself), so
-            # nothing is cached on the instance and `chatgpt-account-id` is left
-            # off — the proxy picks which account renders.
+            # nothing is cached on the instance — the proxy picks the account.
+            # Images API for every intent (see images_api docstring for why).
             endpoint, access = pool
-            account_id, refresh, auth_store = None, None, {}
-        else:
-            endpoint = None
-            if self._auth is None:
-                self._auth = auth.load_auth()
-            auth_store = self._auth
-            access, account_id, refresh = auth.extract_tokens(auth_store)
+            return images_api.generate_image_bytes(
+                prompt,
+                size=size,
+                output_format=fmt,
+                api_key=access,
+                endpoint=endpoint,
+                total_timeout=total_timeout,
+                progress=progress,
+                refs=refs,
+                intent=intent,
+                labels=labels,
+                relation=relation,
+            )
+        if self._auth is None:
+            self._auth = auth.load_auth()
+        auth_store = self._auth
+        access, account_id, refresh = auth.extract_tokens(auth_store)
         return client.generate_image_bytes(
             prompt,
             size=size,
@@ -73,7 +85,7 @@ class CodexImageProvider:
             account_id=account_id,
             refresh_token=refresh,
             auth=auth_store,
-            endpoint=endpoint,
+            endpoint=None,  # direct mode: OpenAI backend; pools use images_api
             model=self._model,
             total_timeout=total_timeout,
             stall_timeout=stall_timeout,
